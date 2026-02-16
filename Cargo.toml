@@ -1,0 +1,14 @@
+[package]
+name = "asr_rs"
+version = "0.1.0"
+edition = "2024"
+
+[features]
+bindgen=[]
+
+[dependencies]
+cpal = "0.17.1"
+log = "0.4.29"
+serde = { version = "1.0.228", features = ["derive"] }
+thiserror = "2.0.18"
+whisper-rs = {version="0.15.1", features=["cuda"]}
