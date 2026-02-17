@@ -35,7 +35,8 @@ unsafe extern "C" fn log_cb(
         level, "{}", text.trim_end());
 }
 
-pub fn set_whisper_logger() {
+/// Set the logger callback for whisper.
+pub fn setup_whisper_logger() {
     static ONCE_LOGGER: std::sync::Once = std::sync::Once::new();
 
     ONCE_LOGGER.call_once(|| {

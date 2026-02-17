@@ -8,6 +8,7 @@ bindgen=[]
 
 
 [dependencies]
+colored = "3.1.1"
 cpal = {version="0.17.1", features=["jack"]}
 hound = "3.5.1"
 log = "0.4.29"

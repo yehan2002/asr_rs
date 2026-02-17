@@ -7,6 +7,7 @@ pub struct Config {
     pub model: WhisperModel,
     pub vad: VadModel,
     pub model_dir: PathBuf,
+    pub segment_buffer: i32,
 }
 
 pub enum WhisperModel {

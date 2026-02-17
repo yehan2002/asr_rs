@@ -1,4 +1,5 @@
-use std::{fmt::Display, sync, thread};
+use colored::Colorize;
+use std::{fmt::Display, fmt::Write, sync, thread};
 
 mod backend;
 mod error;
@@ -10,7 +11,7 @@ pub use error::{ASRError, ASRResult};
 
 use tokio::sync::mpsc;
 
-#[derive(Debug, serde::Serialize)]
+#[derive(Debug, serde::Serialize, Clone)]
 pub struct PartialSegment {
     pub start: f64,
     pub end: f64,
@@ -19,19 +20,55 @@ pub struct PartialSegment {
 
 #[derive(Debug, serde::Serialize)]
 pub enum Segment {
-    Silence { start: f64, end: f64 },
-    Partial(Vec<PartialSegment>),
-    Full { text: String },
+    Silence {
+        start: f64,
+        end: f64,
+    },
+    Partial {
+        finalized: Vec<PartialSegment>,
+        current: Vec<PartialSegment>,
+    },
+    Full {
+        text: String,
+    },
+}
+
+impl Display for PartialSegment {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        writeln!(f, "[{0:.2} -> {1:.2}] {2}", self.start, self.end, self.text)
+    }
+}
+
+impl PartialSegment {
+    fn format_styled(
+        &self,
+        f: &mut std::fmt::Formatter<'_>,
+        is_finalized: bool,
+    ) -> std::fmt::Result {
+        let text = format!("[{0:.2} -> {1:.2}] {2}", self.start, self.end, self.text);
+        let text = if is_finalized {
+            text.green()
+        } else {
+            text.bright_white()
+        };
+
+        writeln!(f, "{text}")
+    }
 }
 
 impl Display for Segment {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Segment::Silence { start, end } => write!(f, "[{start:.2} -> {end:.2}] [Silence]"),
-            Segment::Partial(partials) => {
-                for part in partials {
-                    let _ = write!(f, "[{0:.2} -> {1:.2}] {2}", part.start, part.end, part.text);
+            Segment::Partial { finalized, current } => {
+                for part in finalized {
+                    let _ = part.format_styled(f, true);
                 }
+
+                for part in current {
+                    let _ = part.format_styled(f, false);
+                }
+
                 Ok(())
             }
             Segment::Full { text } => write!(f, "{text}"),

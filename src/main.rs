@@ -7,6 +7,7 @@ fn main() {
         model: whisper::WhisperModel::Medium,
         vad: whisper::VadModel::Silero,
         model_dir: PathBuf::from("./models"),
+        segment_buffer: 1,
     };
     let ts = StreamTranscriber::create(Backend::Whisper(config)).unwrap();
 

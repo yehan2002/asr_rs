@@ -25,4 +25,7 @@ pub enum ASRError {
 
     #[error("Failed to initialize asr backend")]
     BackendInit,
+
+    #[error("Failed to get segment")]
+    SegmentParseFailed,
 }
