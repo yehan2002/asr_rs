@@ -1,12 +1,12 @@
 mod config;
 mod logger;
 
-use std::{
-    sync::mpsc::{Receiver, Sender},
-    time::{self, Duration},
-};
+use std::time::{self, Duration};
 
-use crate::{ASRError, ASRResult, Segment, whisper::config::ModelInfo};
+use crate::{
+    ASRError, ASRResult, AudioReceiver, BackendImpl, PartialSegment, Segment,
+    whisper::config::ModelInfo,
+};
 
 pub use crate::whisper::config::{Config, VadModel, WhisperModel};
 
@@ -16,7 +16,7 @@ pub(crate) struct WhisperBackend {
 }
 
 impl WhisperBackend {
-    pub fn new(config: Config) -> ASRResult<WhisperBackend> {
+    pub fn new(config: Config) -> ASRResult<BackendImpl> {
         let model_path = config.model.resolve_path(&config.model_dir)?;
         let vad_path = config.vad.resolve_path(&config.model_dir)?;
 
@@ -52,25 +52,17 @@ impl WhisperBackend {
             error: Box::new(e),
         })?;
 
-        Ok(WhisperBackend { state, vad })
+        Ok(BackendImpl::Whisper(WhisperBackend { state, vad }))
     }
 
-    pub(crate) fn run(
-        mut self,
-        audio_rx: Receiver<Vec<f32>>,
-        transcribe_tx: Sender<ASRResult<Segment>>,
-    ) {
-        if let Err(err) = self.run_inner(audio_rx, &transcribe_tx) {
+    pub(crate) fn run(mut self, mut stream: AudioReceiver) {
+        if let Err(err) = self.run_inner(&mut stream) {
             log::error!("Failed to transcribe due to error: {err}");
-            let _ = transcribe_tx.send(Err(err));
+            let _ = stream.send_segment(Err(err));
         }
     }
 
-    fn run_inner(
-        &mut self,
-        audio_rx: Receiver<Vec<f32>>,
-        transcribe_tx: &Sender<ASRResult<Segment>>,
-    ) -> ASRResult<()> {
+    fn run_inner(&mut self, stream: &mut AudioReceiver) -> ASRResult<()> {
         let mut params = whisper_rs::FullParams::new(whisper_rs::SamplingStrategy::BeamSearch {
             beam_size: 5,
             patience: 1.0,
@@ -90,9 +82,8 @@ impl WhisperBackend {
 
         let mut next_start = Duration::from_secs(0);
         let mut full_text = String::new();
-        let mut buffer = Vec::<f32>::new();
 
-        while let Ok(mut audio_chunk) = audio_rx.recv() {
+        while let Some(audio_chunk) = stream.next_chunk() {
             let chunk_start = next_start;
             next_start = time::Instant::now().duration_since(start);
 
@@ -101,11 +92,16 @@ impl WhisperBackend {
                 .segments_from_samples(vad_params, &audio_chunk)
                 .map_err(ASRError::Vad)?;
 
-            buffer.append(&mut audio_chunk);
-
             let vad_segments = vad_result.num_segments();
             if vad_segments <= 0 {
                 log::debug!("No Vad segments. Skipping...");
+                let result = stream.send_segment(Ok(Segment::Silence {
+                    start: chunk_start.as_secs_f64(),
+                    end: next_start.as_secs_f64(),
+                }));
+                if result.is_none() {
+                    break;
+                }
                 continue;
             }
             log::debug!("Found Vad segments: {}", vad_segments);
@@ -117,11 +113,12 @@ impl WhisperBackend {
             }
 
             self.state
-                .full(params, &buffer)
+                .full(params, &audio_chunk)
                 .map_err(ASRError::Transcribe)?;
 
             let n_segments = self.state.full_n_segments();
-            for idx in 0..(n_segments - 1) {
+            let mut partials = Vec::with_capacity(n_segments as usize);
+            for idx in 0..n_segments {
                 let Some(segment) = self.state.get_segment(idx) else {
                     break;
                 };
@@ -132,23 +129,25 @@ impl WhisperBackend {
                 let text = segment.to_str().map_err(ASRError::Transcribe)?;
                 full_text.push_str(text);
 
-                let segment = Segment::Partial {
+                let part = PartialSegment {
                     start: start_time,
                     end: end_time,
                     text: text.to_string(),
                 };
+                partials.push(part);
+            }
 
-                log::debug!("Partial segment: {:?}", segment);
-                let send_result = transcribe_tx.send(Ok(segment));
+            let segment = Segment::Partial(partials);
+            log::debug!("Partial segment: {:?}", segment);
+            let send_result = stream.send_segment(Ok(segment));
 
-                if send_result.is_err() {
-                    log::info!("Stopping asr due to reciever closing");
-                    break;
-                }
+            if send_result.is_none() {
+                log::info!("Stopping asr due to reciever closing");
+                break;
             }
         }
 
-        let _ = transcribe_tx.send(Ok(Segment::Full { text: full_text }));
+        let _ = stream.send_segment(Ok(Segment::Full { text: full_text }));
         Ok(())
     }
 }

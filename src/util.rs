@@ -1,13 +1,12 @@
+use crate::StreamTranscriber;
 use cpal::{
     SampleFormat,
     traits::{DeviceTrait, HostTrait, StreamTrait},
 };
 
-use crate::StreamTranscriber;
-
-pub fn mic_input(ts: StreamTranscriber) {
+pub fn mic_input(mut ts: StreamTranscriber) {
     let host = cpal::default_host();
-    let device = host.default_input_device().unwrap();
+    let device = host.default_output_device().unwrap();
 
     let config = if device.supports_input() {
         device.default_input_config()
@@ -28,12 +27,15 @@ pub fn mic_input(ts: StreamTranscriber) {
                 sample_rate: 16000,
                 buffer_size: cpal::BufferSize::Fixed(16000 * 1),
             },
-            move |data, _: &_| ts.send_audio(data),
+            move |data, _: &_| {
+                let result = ts.transcribe_audio(data.to_vec()).unwrap();
+                println!("{result}");
+            },
             err_fn,
             None,
         )
         .unwrap();
 
     stream.play().unwrap();
-    std::thread::sleep(std::time::Duration::from_secs(5));
+    std::thread::sleep(std::time::Duration::from_secs(10000));
 }

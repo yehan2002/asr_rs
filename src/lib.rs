@@ -1,101 +1,100 @@
-use std::{
-    error::Error,
-    sync::{
-        self,
-        mpsc::{Receiver, Sender},
-    },
-    thread::{self, JoinHandle},
-};
+use std::{fmt::Display, sync, thread};
 
-use serde::Serialize;
-
+mod backend;
+mod error;
 pub mod util;
 pub mod whisper;
+pub use backend::Backend;
+pub(crate) use backend::{AudioReceiver, BackendImpl};
+pub use error::{ASRError, ASRResult};
 
-pub type ASRResult<T> = Result<T, ASRError>;
+use tokio::sync::mpsc;
 
-#[derive(Debug, thiserror::Error)]
-pub enum ASRError {
-    #[error("{model} Model was not found at {path}. Download it from {url}")]
-    ModelNotFound {
-        model: String,
-        path: String,
-        url: String,
-    },
-
-    #[error("Failed to initialize {model}: {error}")]
-    ModelInit {
-        model: String,
-        error: Box<dyn Error + Sync + Send>,
-    },
-
-    #[error("Failed to transcribe audio: {0}")]
-    Transcribe(whisper_rs::WhisperError),
-
-    #[error("Failed to run vad on audio: {0}")]
-    Vad(whisper_rs::WhisperError),
+#[derive(Debug, serde::Serialize)]
+pub struct PartialSegment {
+    pub start: f64,
+    pub end: f64,
+    pub text: String,
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, serde::Serialize)]
 pub enum Segment {
-    Partial { start: f64, end: f64, text: String },
+    Silence { start: f64, end: f64 },
+    Partial(Vec<PartialSegment>),
     Full { text: String },
 }
 
-pub struct StreamTranscriber {
-    transcribe_thread: JoinHandle<()>,
-    pub audio_tx: Sender<Vec<f32>>,
-    pub transcribe_rx: Receiver<ASRResult<Segment>>,
+impl Display for Segment {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Segment::Silence { start, end } => write!(f, "[{start:.2} -> {end:.2}] [Silence]"),
+            Segment::Partial(partials) => {
+                for part in partials {
+                    let _ = write!(f, "[{0:.2} -> {1:.2}] {2}", part.start, part.end, part.text);
+                }
+                Ok(())
+            }
+            Segment::Full { text } => write!(f, "{text}"),
+        }
+    }
 }
 
-pub enum Backend {
-    Whisper(whisper::Config),
+pub struct StreamTranscriber {
+    pub audio_tx: mpsc::Sender<Vec<f32>>,
+    pub transcribe_rx: mpsc::Receiver<ASRResult<Segment>>,
 }
 
 impl StreamTranscriber {
-    pub fn new(backend: Backend) -> ASRResult<Self> {
+    pub fn create(backend: Backend) -> ASRResult<Self> {
+        // channel used indicate that the asr backend was created successully.
         let (init_tx, init_rx) = sync::mpsc::channel::<ASRResult<()>>();
-        let (audio_tx, audio_rx) = sync::mpsc::channel::<Vec<f32>>();
-        let (transcribe_tx, transcribe_rx) = sync::mpsc::channel::<ASRResult<Segment>>();
 
-        let asr_thread = thread::spawn(move || {
+        let (audio_tx, audio_rx) = mpsc::channel::<Vec<f32>>(1);
+        let (transcribe_tx, transcribe_rx) = mpsc::channel::<ASRResult<Segment>>(100);
+
+        thread::spawn(move || {
             let result = match backend {
                 Backend::Whisper(config) => whisper::WhisperBackend::new(config),
             };
 
             let backend = match result {
                 Err(e) => {
-                    init_tx
-                        .send(Err(e))
-                        .expect("send on init_tx should succeed");
+                    let _ = init_tx.send(Err(e));
                     return;
                 }
                 Ok(v) => {
+                    // notify successfull startup
                     init_tx
                         .send(Ok(()))
                         .expect("send on init_tx should succeed");
+
                     v
                 }
             };
 
-            backend.run(audio_rx, transcribe_tx);
+            backend.process_stream(AudioReceiver {
+                audio_rx,
+                transcribe_tx,
+            });
         });
 
-        init_rx.recv().expect("init message should be received")?;
+        init_rx
+            .recv()
+            .map_err(|_e| ASRError::BackendInit)
+            .flatten()?;
 
         Ok(Self {
-            transcribe_thread: asr_thread,
             audio_tx,
             transcribe_rx,
         })
     }
 
-    pub fn send_audio(&self, vec: &[f32]) {
-        self.audio_tx.send(vec.to_vec()).unwrap()
+    pub fn transcribe_audio(&mut self, vec: Vec<f32>) -> ASRResult<Segment> {
+        self.audio_tx.blocking_send(vec).unwrap();
+        self.transcribe_rx.blocking_recv().unwrap()
     }
 
     pub fn finish(self) {
         drop(self.audio_tx);
-        self.transcribe_thread.join().unwrap();
     }
 }

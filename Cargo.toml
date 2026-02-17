@@ -6,9 +6,12 @@ edition = "2024"
 [features]
 bindgen=[]
 
+
 [dependencies]
-cpal = "0.17.1"
+cpal = {version="0.17.1", features=["jack"]}
+hound = "3.5.1"
 log = "0.4.29"
 serde = { version = "1.0.228", features = ["derive"] }
 thiserror = "2.0.18"
+tokio = { version="1.49.0", features=["sync", "signal"] }
 whisper-rs = {version="0.15.1", features=["cuda"]}
