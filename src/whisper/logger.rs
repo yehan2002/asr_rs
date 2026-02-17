@@ -27,7 +27,7 @@ unsafe extern "C" fn log_cb(
         _ => Level::Trace,
     };
 
-    // SAFETY: c_text is a valid c string and text contains an owned copy of the string and can be safely used for logging.
+    // SAFETY: `c_text` is a valid c string and `text` contains an owned copy of the string and can be safely used for logging.
     let text = unsafe { ffi::CStr::from_ptr(c_text).to_string_lossy().into_owned() };
 
     log!(

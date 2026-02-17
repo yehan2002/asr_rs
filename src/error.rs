@@ -28,4 +28,7 @@ pub enum ASRError {
 
     #[error("Failed to get segment")]
     SegmentParseFailed,
+
+    #[error("Failed to download model: {0}")]
+    Download(Box<dyn Error + Sync + Send>),
 }

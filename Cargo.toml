@@ -5,14 +5,17 @@ edition = "2024"
 
 [features]
 bindgen=[]
-
+model_download=["dep:indicatif", "dep:ureq"]
+default=["model_download", ]
 
 [dependencies]
 colored = "3.1.1"
 cpal = {version="0.17.1", features=["jack"]}
 hound = "3.5.1"
+indicatif = {version="0.18.4",optional=true}
 log = "0.4.29"
 serde = { version = "1.0.228", features = ["derive"] }
 thiserror = "2.0.18"
 tokio = { version="1.49.0", features=["sync", "signal"] }
+ureq = { version = "3.2.0", optional = true }
 whisper-rs = {version="0.15.1", features=["cuda"]}

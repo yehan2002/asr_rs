@@ -4,8 +4,7 @@ mod logger;
 use whisper_rs::WhisperSegment;
 
 use crate::{
-    ASRError, ASRResult, AudioReceiver, BackendImpl, PartialSegment, Segment,
-    whisper::config::ModelInfo,
+    ASRError, ASRResult, AudioReceiver, BackendImpl, PartialSegment, Segment, models::Model,
 };
 
 pub use crate::whisper::config::{Config, VadModel, WhisperModel};
@@ -24,8 +23,13 @@ pub(crate) struct WhisperBackend {
 
 impl WhisperBackend {
     pub fn new(config: Config) -> ASRResult<BackendImpl> {
-        let model_path = config.model.resolve_path(&config.model_dir)?;
-        let vad_path = config.vad.resolve_path(&config.model_dir)?;
+        let model_path = config
+            .model
+            .resolve_model(&config.model_dir, config.auto_download_models)?;
+
+        let vad_path = config
+            .vad
+            .resolve_model(&config.model_dir, config.auto_download_models)?;
 
         logger::setup_whisper_logger();
 
@@ -107,7 +111,7 @@ impl WhisperBackend {
 
     fn add_chunk(&mut self, mut audio_chunk: Vec<f32>) -> ASRResult<Segment> {
         let vad_params = whisper_rs::WhisperVadParams::new();
-        let mut whisper_params = self.whisper_full_params();
+        let whisper_params = self.whisper_full_params();
 
         let vad_result = self
             .vad
@@ -138,10 +142,6 @@ impl WhisperBackend {
         let flush = vad_segments == 0;
 
         self.audio_buffer.append(&mut audio_chunk);
-
-        // if !self.finalized_segments.is_empty() {
-        //     whisper_params.set_initial_prompt(&self.finalized_segments.last().unwrap().text);
-        // }
 
         self.state
             .full(whisper_params, &self.audio_buffer)

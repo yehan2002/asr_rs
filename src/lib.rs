@@ -1,5 +1,7 @@
+#![warn(clippy::pedantic)]
+
 use colored::Colorize;
-use std::{fmt::Display, fmt::Write, sync, thread};
+use std::{fmt::Display, sync, thread};
 
 mod backend;
 mod error;
@@ -8,6 +10,7 @@ pub mod whisper;
 pub use backend::Backend;
 pub(crate) use backend::{AudioReceiver, BackendImpl};
 pub use error::{ASRError, ASRResult};
+pub(crate) mod models;
 
 use tokio::sync::mpsc;
 

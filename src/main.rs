@@ -1,13 +1,9 @@
-use std::path::PathBuf;
-
 use asr_rs::{Backend, StreamTranscriber, util, whisper};
 
 fn main() {
     let config = whisper::Config {
-        model: whisper::WhisperModel::Medium,
-        vad: whisper::VadModel::Silero,
-        model_dir: PathBuf::from("./models"),
-        segment_buffer: 1,
+        model: whisper::WhisperModel::Tiny,
+        ..Default::default()
     };
     let ts = StreamTranscriber::create(Backend::Whisper(config)).unwrap();
 

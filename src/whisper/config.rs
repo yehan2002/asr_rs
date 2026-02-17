@@ -1,82 +1,94 @@
 use std::path::PathBuf;
 
-use crate::{ASRError, ASRResult};
-const BASE_URL: &'static str = "https://huggingface.co/ggml-org/whisper-vad/resolve/main/";
+use crate::models::Model;
 
+/// Config for the whisper ASR backend
 pub struct Config {
+    /// The model to use.
+    ///  The model must be available in the `model_dir`/whisper/ directory.
     pub model: WhisperModel,
+    /// The vad model to use.
+    /// Currently only supports silero.
     pub vad: VadModel,
+    /// The directory that contains the models.
     pub model_dir: PathBuf,
+    /// The amount of segments to buffer when processing audio chunks.
+    /// Higher values give better transcription quality at the cost of processing time.
     pub segment_buffer: i32,
+    /// If set automatically downloads missing models.
+    pub auto_download_models: bool,
 }
 
+impl Default for Config {
+    fn default() -> Self {
+        Self {
+            model: WhisperModel::Medium,
+            vad: VadModel::Silero,
+            model_dir: PathBuf::from("./models"),
+            segment_buffer: 1,
+            auto_download_models: false,
+        }
+    }
+}
+
+/// Supported whisper models
 pub enum WhisperModel {
     Small,
     Tiny,
     Base,
     Medium,
+    Large,
+    Turbo,
+    Custom { name: String, base_url: String },
 }
 
 pub enum VadModel {
     Silero,
+    Custom { name: String, base_url: String },
 }
 
-pub trait ModelInfo
-where
-    Self: Sized,
-{
-    fn file_name(&self) -> String;
-    fn model_type(&self) -> &'static str;
+const VAD_BASE_URL: &'static str = "https://huggingface.co/ggml-org/whisper-vad/resolve/main/";
+const WHISPER_BASE_URL: &'static str = "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/";
 
-    fn resolve_path(&self, model_dir: &PathBuf) -> ASRResult<String> {
-        let file_name = self.file_name();
-        let model = self.model_type().to_string();
-
-        let model_path = model_dir.join(&model).join(&file_name);
-        let model_path_str = model_path
-            .to_str()
-            .expect("path should be a valid string")
-            .to_owned();
-
-        if model_path.exists() {
-            return Ok(model_path_str);
-        }
-
-        let url = format!("{BASE_URL}{file_name}");
-
-        Err(ASRError::ModelNotFound {
-            model,
-            path: model_path_str,
-            url,
-        })
-    }
-}
-
-impl ModelInfo for VadModel {
-    fn file_name(&self) -> String {
+impl Model for VadModel {
+    fn model_info(&self) -> crate::models::ModelInfo {
         match self {
-            VadModel::Silero => "ggml-silero-v6.2.0.bin".to_owned(),
+            VadModel::Silero => crate::models::ModelInfo {
+                file_name: "ggml-silero-v6.2.0.bin".to_owned(),
+                model_type: "silero".to_owned(),
+                base_url: VAD_BASE_URL.to_owned(),
+            },
+            VadModel::Custom { name, base_url } => crate::models::ModelInfo {
+                file_name: name.to_owned(),
+                model_type: "custom".to_owned(),
+                base_url: base_url.to_owned(),
+            },
         }
-    }
-
-    fn model_type(&self) -> &'static str {
-        "silero"
     }
 }
 
-impl ModelInfo for WhisperModel {
-    fn file_name(&self) -> String {
+impl Model for WhisperModel {
+    fn model_info(&self) -> crate::models::ModelInfo {
         let name = match self {
+            WhisperModel::Custom { name, base_url } => {
+                return crate::models::ModelInfo {
+                    file_name: name.to_owned(),
+                    model_type: "custom".to_owned(),
+                    base_url: base_url.to_owned(),
+                };
+            }
             WhisperModel::Small => "small.en",
             WhisperModel::Tiny => "tiny.en",
             WhisperModel::Base => "base.en",
             WhisperModel::Medium => "medium.en",
+            WhisperModel::Large => "large-v3",
+            WhisperModel::Turbo => "large-v3-turbo",
         };
-
-        format!("ggml-{name}.bin")
-    }
-
-    fn model_type(&self) -> &'static str {
-        "whisper"
+        let file_name = format!("ggml-{name}.bin");
+        return crate::models::ModelInfo {
+            file_name: file_name,
+            model_type: "whisper".to_owned(),
+            base_url: WHISPER_BASE_URL.to_owned(),
+        };
     }
 }
