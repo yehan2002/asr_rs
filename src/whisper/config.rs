@@ -15,8 +15,6 @@ pub struct Config {
     /// The amount of segments to buffer when processing audio chunks.
     /// Higher values give better transcription quality at the cost of processing time.
     pub segment_buffer: i32,
-    /// If set automatically downloads missing models.
-    pub auto_download_models: bool,
 }
 
 impl Default for Config {
@@ -25,8 +23,7 @@ impl Default for Config {
             model: WhisperModel::Medium,
             vad: VadModel::Silero,
             model_dir: PathBuf::from("./models"),
-            segment_buffer: 1,
-            auto_download_models: false,
+            segment_buffer: 2,
         }
     }
 }
