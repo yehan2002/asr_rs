@@ -1,3 +1,5 @@
+use std::sync;
+
 use crate::StreamTranscriber;
 use cpal::{
     SampleFormat,
@@ -20,6 +22,8 @@ pub fn mic_input(mut ts: StreamTranscriber) {
         eprintln!("an error occurred on stream: {err}");
     };
 
+    let (audio_tx, audio_rx) = sync::mpsc::channel::<Vec<f32>>();
+
     let stream = device
         .build_input_stream(
             &cpal::StreamConfig {
@@ -27,15 +31,16 @@ pub fn mic_input(mut ts: StreamTranscriber) {
                 sample_rate: 16000,
                 buffer_size: cpal::BufferSize::Fixed(16000 * 1),
             },
-            move |data, _: &_| {
-                let result = ts.transcribe_audio(data.to_vec()).unwrap();
-                println!("{result}");
-            },
+            move |data, _: &_| audio_tx.send(data.to_vec()).unwrap(),
             err_fn,
             None,
         )
         .unwrap();
 
     stream.play().unwrap();
-    std::thread::sleep(std::time::Duration::from_secs(10000));
+
+    while let Ok(chunk) = audio_rx.recv() {
+        let result = ts.transcribe_audio(chunk).unwrap();
+        println!("{result}");
+    }
 }

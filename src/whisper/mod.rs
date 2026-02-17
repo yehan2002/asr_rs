@@ -4,8 +4,8 @@ mod logger;
 use whisper_rs::WhisperSegment;
 
 use crate::{
-    AudioReceiver, BackendImpl, Error, PartialTranscription, Result, Segment, Silence, Token,
-    Transcription, models::Model,
+    BackendImpl, Error, PartialTranscription, Result, Segment, Silence, Token, Transcription,
+    models::Model,
 };
 
 pub use crate::whisper::config::{Config, VadModel, WhisperModel};
@@ -98,25 +98,7 @@ impl WhisperBackend {
         params
     }
 
-    pub(crate) fn run(mut self, mut stream: AudioReceiver) {
-        if let Err(err) = self.run_inner(&mut stream) {
-            log::error!("Failed to transcribe due to error: {err}");
-            let _ = stream.send_segment(Err(err));
-        }
-    }
-    fn run_inner(&mut self, stream: &mut AudioReceiver) -> Result<()> {
-        while let Some(audio_chunk) = stream.next_chunk() {
-            let result = self.add_chunk(audio_chunk);
-            let should_stop = stream.transcribe_tx.blocking_send(result).is_err();
-            if should_stop {
-                break;
-            }
-        }
-
-        Ok(())
-    }
-
-    fn add_chunk(&mut self, mut audio_chunk: Vec<f32>) -> Result<Transcription> {
+    pub fn transcribe_chunk(&mut self, mut audio_chunk: Vec<f32>) -> Result<Transcription> {
         let vad_params = whisper_rs::WhisperVadParams::new();
         let whisper_params = self.whisper_full_params();
 
@@ -191,6 +173,23 @@ impl WhisperBackend {
         for idx in partials_start_idx..n_segments {
             let segment = self.get_whisper_segment(idx, time_offset)?;
             self.state.processing.push(segment);
+        }
+
+        Ok(Transcription::Partial(self.state.clone()))
+    }
+
+    pub fn finish_transcribing(&mut self) -> Result<Transcription> {
+        let whisper_params = self.whisper_full_params();
+        self.whisper
+            .full(whisper_params, &self.audio_buffer)
+            .map_err(Error::Transcribe)?;
+        let n_segments = self.whisper.full_n_segments();
+
+        for idx in 0..n_segments {
+            let segment = self.get_whisper_segment(idx, self.time_offset)?;
+
+            self.state.full_text.push_str(&segment.text);
+            self.state.finalized.push(segment);
         }
 
         Ok(Transcription::Partial(self.state.clone()))
