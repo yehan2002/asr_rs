@@ -17,8 +17,8 @@ pub(crate) struct WhisperBackend {
 
 impl WhisperBackend {
     pub fn new(config: Config) -> ASRResult<WhisperBackend> {
-        let model_path = config.model.get_path(&config.model_dir)?;
-        let vad_path = config.vad.get_path(&config.model_dir)?;
+        let model_path = config.model.resolve_path(&config.model_dir)?;
+        let vad_path = config.vad.resolve_path(&config.model_dir)?;
 
         logger::set_whisper_logger();
 
@@ -28,18 +28,29 @@ impl WhisperBackend {
             ..Default::default()
         };
 
-        let engine = whisper_rs::WhisperContext::new_with_params(&model_path, params)
-            .map_err(ASRError::WhisperInit)?;
+        let engine =
+            whisper_rs::WhisperContext::new_with_params(&model_path, params).map_err(|e| {
+                ASRError::ModelInit {
+                    model: "Whisper".to_owned(),
+                    error: Box::new(e),
+                }
+            })?;
 
         log::info!("Whisper model initilized from {model_path}");
 
-        let state = engine.create_state().map_err(ASRError::WhisperInit)?;
+        let state = engine.create_state().map_err(|e| ASRError::ModelInit {
+            model: "Whisper".to_owned(),
+            error: Box::new(e),
+        })?;
 
         let vad = whisper_rs::WhisperVadContext::new(
             &vad_path,
             whisper_rs::WhisperVadContextParams::new(),
         )
-        .map_err(ASRError::VADInit)?;
+        .map_err(|e| ASRError::ModelInit {
+            model: "VAD".to_owned(),
+            error: Box::new(e),
+        })?;
 
         Ok(WhisperBackend { state, vad })
     }

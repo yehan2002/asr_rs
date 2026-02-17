@@ -24,41 +24,47 @@ pub trait ModelInfo
 where
     Self: Sized,
 {
-    fn get_model_name(&self) -> String;
+    fn file_name(&self) -> String;
     fn model_type(&self) -> &'static str;
 
-    fn get_path(&self, model_dir: &PathBuf) -> ASRResult<String> {
-        let name = self.get_model_name();
-        let model_type = self.model_type().to_string();
+    fn resolve_path(&self, model_dir: &PathBuf) -> ASRResult<String> {
+        let file_name = self.file_name();
+        let model = self.model_type().to_string();
 
-        let output = model_dir.join(&name);
-        if output.exists() {
-            return Ok(output
-                .to_str()
-                .expect("path should be a valid string")
-                .to_owned());
+        let model_path = model_dir.join(&model).join(&file_name);
+        let model_path_str = model_path
+            .to_str()
+            .expect("path should be a valid string")
+            .to_owned();
+
+        if model_path.exists() {
+            return Ok(model_path_str);
         }
 
-        let url = format!("{BASE_URL}{name}");
+        let url = format!("{BASE_URL}{file_name}");
 
-        Err(ASRError::ModelNotFound(model_type, name, url))
+        Err(ASRError::ModelNotFound {
+            model,
+            path: model_path_str,
+            url,
+        })
     }
 }
 
 impl ModelInfo for VadModel {
-    fn get_model_name(&self) -> String {
+    fn file_name(&self) -> String {
         match self {
             VadModel::Silero => "ggml-silero-v6.2.0.bin".to_owned(),
         }
     }
 
     fn model_type(&self) -> &'static str {
-        "Vad"
+        "silero"
     }
 }
 
 impl ModelInfo for WhisperModel {
-    fn get_model_name(&self) -> String {
+    fn file_name(&self) -> String {
         let name = match self {
             WhisperModel::Small => "small.en",
             WhisperModel::Tiny => "tiny.en",
@@ -70,6 +76,6 @@ impl ModelInfo for WhisperModel {
     }
 
     fn model_type(&self) -> &'static str {
-        "Whisper"
+        "whisper"
     }
 }

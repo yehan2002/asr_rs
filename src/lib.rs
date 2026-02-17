@@ -1,4 +1,5 @@
 use std::{
+    error::Error,
     sync::{
         self,
         mpsc::{Receiver, Sender},
@@ -15,14 +16,18 @@ pub type ASRResult<T> = Result<T, ASRError>;
 
 #[derive(Debug, thiserror::Error)]
 pub enum ASRError {
-    #[error("{0} Model was not found at {1}. Download it from {2}")]
-    ModelNotFound(String, String, String),
+    #[error("{model} Model was not found at {path}. Download it from {url}")]
+    ModelNotFound {
+        model: String,
+        path: String,
+        url: String,
+    },
 
-    #[error("Failed to initialize whisper: {0}")]
-    WhisperInit(whisper_rs::WhisperError),
-
-    #[error("Failed to initialize vad model: {0}")]
-    VADInit(whisper_rs::WhisperError),
+    #[error("Failed to initialize {model}: {error}")]
+    ModelInit {
+        model: String,
+        error: Box<dyn Error + Sync + Send>,
+    },
 
     #[error("Failed to transcribe audio: {0}")]
     Transcribe(whisper_rs::WhisperError),
@@ -54,11 +59,11 @@ impl StreamTranscriber {
         let (transcribe_tx, transcribe_rx) = sync::mpsc::channel::<ASRResult<Segment>>();
 
         let asr_thread = thread::spawn(move || {
-            let state = match backend {
+            let result = match backend {
                 Backend::Whisper(config) => whisper::WhisperBackend::new(config),
             };
 
-            let state = match state {
+            let backend = match result {
                 Err(e) => {
                     init_tx
                         .send(Err(e))
@@ -73,7 +78,7 @@ impl StreamTranscriber {
                 }
             };
 
-            state.run(audio_rx, transcribe_tx);
+            backend.run(audio_rx, transcribe_tx);
         });
 
         init_rx.recv().expect("init message should be received")?;
