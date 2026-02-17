@@ -131,17 +131,7 @@ impl WhisperBackend {
                 log::debug!("No Vad segments. Skipping...");
 
                 // update silence durations
-                let silence_length = samples_to_duration(audio_chunk.len());
-                self.time_offset += silence_length;
-                self.silence_duration += silence_length;
-                if let Some(ref mut silence) = self.state.current_silence {
-                    silence.end += silence_length;
-                } else {
-                    self.state.current_silence = Some(Silence {
-                        start: self.time_offset - self.silence_duration,
-                        end: self.time_offset,
-                    })
-                }
+                self.add_silence(audio_chunk.len());
 
                 if !self.audio_buffer.is_empty() {
                     // add the empty audio to break sentences
@@ -153,12 +143,7 @@ impl WhisperBackend {
 
             println!("No Vad segments. Flushing buffer...");
         } else {
-            if self.silence_duration > 0.0 {
-                if let Some(silence) = self.state.current_silence.take() {
-                    self.state.silences.push(silence);
-                }
-                self.silence_duration = 0.0;
-            }
+            self.clear_silence();
             log::debug!("Found Vad segments: {}", vad_segments);
         }
 
@@ -182,9 +167,7 @@ impl WhisperBackend {
             };
 
             if flush {
-                self.time_offset += samples_to_duration(self.audio_buffer.len());
-                self.audio_buffer.clear();
-                log::debug!("cleared audio buffer",);
+                self.drop_samples_from_buffer(self.audio_buffer.len());
             } else {
                 let segment = self
                     .whisper
@@ -192,44 +175,80 @@ impl WhisperBackend {
                     .ok_or(Error::SegmentParseFailed)?;
 
                 let sample_end = centiseconds_to_samples(segment.end_timestamp());
-                if sample_end < self.audio_buffer.len() {
-                    let orig_size = self.audio_buffer.len();
-                    let new_size = self.audio_buffer.len() - sample_end;
-
-                    self.audio_buffer.copy_within(sample_end..orig_size, 0);
-                    self.audio_buffer.truncate(new_size);
-
-                    self.time_offset += samples_to_duration(sample_end);
-                    log::debug!("resized audio buffer {orig_size} -> {new_size}",);
-                }
+                self.drop_samples_from_buffer(sample_end);
             }
 
             for idx in 0..partials_start_idx {
-                let segment = self
-                    .whisper
-                    .get_segment(idx)
-                    .ok_or(Error::SegmentParseFailed)?;
+                let segment = self.get_whisper_segment(idx, time_offset)?;
+                log::info!("Finalized partial segment:\n {}", segment);
 
-                let part = parse_segment(segment, time_offset)?;
-                log::info!("Finalized partial segment:\n {}", part);
-
-                self.state.full_text.push_str(&part.text);
-                self.state.finalized.push(part);
+                self.state.full_text.push_str(&segment.text);
+                self.state.finalized.push(segment);
             }
         }
 
         self.state.processing.clear();
         for idx in partials_start_idx..n_segments {
-            let Some(segment) = self.whisper.get_segment(idx) else {
-                break;
-            };
-
-            self.state
-                .processing
-                .push(parse_segment(segment, time_offset)?);
+            let segment = self.get_whisper_segment(idx, time_offset)?;
+            self.state.processing.push(segment);
         }
 
         Ok(Transcription::Partial(self.state.clone()))
+    }
+
+    /// Gets the whisper segment at the given index.
+    fn get_whisper_segment(&self, idx: i32, time_offset: f64) -> Result<Segment> {
+        let segment = self
+            .whisper
+            .get_segment(idx)
+            .ok_or(Error::SegmentParseFailed)?;
+
+        parse_segment(segment, time_offset)
+    }
+
+    /// Removes the first `n` samples from the audio buffer.
+    /// If n is larger than the total number of frames, the total number is used instead.
+    /// This also updates the time_offset of the buffer.
+    fn drop_samples_from_buffer(&mut self, mut n: usize) {
+        if n < self.audio_buffer.len() {
+            let orig_size = self.audio_buffer.len();
+            let new_size = self.audio_buffer.len() - n;
+
+            self.audio_buffer.copy_within(n..orig_size, 0);
+            self.audio_buffer.truncate(new_size);
+            log::debug!("resized audio buffer {orig_size} -> {new_size}",);
+        } else {
+            n = self.audio_buffer.len();
+            self.audio_buffer.clear();
+            log::debug!("cleared audio buffer",);
+        }
+
+        self.time_offset += samples_to_duration(n);
+    }
+
+    /// Clears the current silence segment and adds it to the history.
+    fn clear_silence(&mut self) {
+        if self.silence_duration > 0.0 {
+            if let Some(silence) = self.state.current_silence.take() {
+                self.state.silences.push(silence);
+            }
+            self.silence_duration = 0.0;
+        }
+    }
+
+    /// update silence durations
+    fn add_silence(&mut self, n_samples: usize) {
+        let silence_length = samples_to_duration(n_samples);
+        self.time_offset += silence_length;
+        self.silence_duration += silence_length;
+        if let Some(ref mut silence) = self.state.current_silence {
+            silence.end += silence_length;
+        } else {
+            self.state.current_silence = Some(Silence {
+                start: self.time_offset - self.silence_duration,
+                end: self.time_offset,
+            })
+        }
     }
 }
 
