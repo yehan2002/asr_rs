@@ -1,4 +1,4 @@
-use crate::{ASRResult, Segment, whisper};
+use crate::{Result, Transcription, whisper};
 use tokio::sync::mpsc;
 
 pub enum Backend {
@@ -19,7 +19,7 @@ impl BackendImpl {
 
 pub(crate) struct AudioReceiver {
     pub(crate) audio_rx: mpsc::Receiver<Vec<f32>>,
-    pub(crate) transcribe_tx: mpsc::Sender<ASRResult<Segment>>,
+    pub(crate) transcribe_tx: mpsc::Sender<Result<Transcription>>,
 }
 
 impl AudioReceiver {
@@ -27,7 +27,7 @@ impl AudioReceiver {
         self.audio_rx.blocking_recv()
     }
 
-    pub(crate) fn send_segment(&self, s: ASRResult<Segment>) -> Option<()> {
+    pub(crate) fn send_segment(&self, s: Result<Transcription>) -> Option<()> {
         self.transcribe_tx.blocking_send(s).ok()
     }
 }

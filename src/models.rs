@@ -1,6 +1,6 @@
-use std::{fs::File, path::PathBuf};
+use std::path::PathBuf;
 
-use crate::{ASRError, ASRResult};
+use crate::{Error, Result};
 
 pub(crate) struct ModelInfo {
     pub file_name: String,
@@ -11,7 +11,7 @@ pub(crate) struct ModelInfo {
 pub(crate) trait Model {
     fn model_info(&self) -> ModelInfo;
 
-    fn resolve_model(&self, model_dir: &PathBuf, can_download: bool) -> ASRResult<String> {
+    fn resolve_model(&self, model_dir: &PathBuf) -> Result<String> {
         let model = self.model_info();
 
         let model_path = model_dir.join(&model.model_type).join(&model.file_name);
@@ -31,18 +31,18 @@ pub(crate) trait Model {
 }
 
 #[cfg(not(feature = "model_download"))]
-fn download_model(model_name: String, out_path: PathBuf, url: String) -> ASRResult<()> {
-    Err(ASRError::ModelNotFound {
+fn download_model(model_name: String, out_path: PathBuf, url: String) -> Result<()> {
+    Err(Error::ModelNotFound {
         model: model.model_type.to_owned(),
         path: model_path_str,
         url: url,
     })
 }
 #[cfg(feature = "model_download")]
-fn download_model(model_name: String, out_path: PathBuf, url: String) -> ASRResult<()> {
+fn download_model(model_name: String, out_path: PathBuf, url: String) -> Result<()> {
     // create parent dir
     std::fs::create_dir_all(out_path.parent().expect("path should have parent"))
-        .map_err(|e| ASRError::Download(Box::new(e)))?;
+        .map_err(|e| Error::Download(Box::new(e)))?;
 
     let mut tmp_path = out_path.clone();
     tmp_path.add_extension(".tmp");
@@ -51,7 +51,7 @@ fn download_model(model_name: String, out_path: PathBuf, url: String) -> ASRResu
 
     let response = ureq::get(url)
         .call()
-        .map_err(|e| ASRError::Download(Box::new(e)))?;
+        .map_err(|e| Error::Download(Box::new(e)))?;
 
     let total_size = response
         .headers()
@@ -72,11 +72,11 @@ fn download_model(model_name: String, out_path: PathBuf, url: String) -> ASRResu
     let reader = response.into_body().into_reader();
     let mut pb_reader = pb.wrap_read(reader);
 
-    let file = std::fs::File::create(&tmp_path).map_err(|e| ASRError::Download(Box::new(e)))?;
+    let file = std::fs::File::create(&tmp_path).map_err(|e| Error::Download(Box::new(e)))?;
     let mut writer = std::io::BufWriter::new(file);
 
-    std::io::copy(&mut pb_reader, &mut writer).map_err(|e| ASRError::Download(Box::new(e)))?;
+    std::io::copy(&mut pb_reader, &mut writer).map_err(|e| Error::Download(Box::new(e)))?;
 
-    std::fs::rename(tmp_path, out_path).map_err(|e| ASRError::Download(Box::new(e)))?;
+    std::fs::rename(tmp_path, out_path).map_err(|e| Error::Download(Box::new(e)))?;
     Ok(())
 }
