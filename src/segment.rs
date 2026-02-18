@@ -11,21 +11,24 @@ pub struct Token {
 /// This is typically 1-2 sentence fragments.
 #[derive(Debug, serde::Serialize, Clone)]
 pub struct Segment {
-    /// The start time of the segment as seconds.
-    pub start: f64,
-    /// The end time of the segment as seconds.
-    pub end: f64,
     /// The text of the segment.
     /// This may or may not be a full sentence.
     pub text: String,
 
     pub tokens: Vec<Token>,
     pub probability: f32,
+    pub timestamp: Timestamp,
 }
 
 /// A silent segment in the audio
 #[derive(Debug, serde::Serialize, Clone)]
 pub struct Silence {
+    pub timestamp: Timestamp,
+}
+
+/// A timestamp
+#[derive(Debug, serde::Serialize, Clone)]
+pub struct Timestamp {
     /// The start time of the segment as seconds.
     pub start: f64,
     /// The end time of the segment as seconds.
@@ -43,7 +46,11 @@ pub struct Transcription {
 
 impl Display for Segment {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        writeln!(f, "[{0:.2} -> {1:.2}] {2}", self.start, self.end, self.text)
+        writeln!(
+            f,
+            "[{0:.2} -> {1:.2}] {2}",
+            self.timestamp.start, self.timestamp.end, self.text
+        )
     }
 }
 
@@ -53,7 +60,10 @@ impl Segment {
         f: &mut std::fmt::Formatter<'_>,
         is_finalized: bool,
     ) -> std::fmt::Result {
-        let text = format!("[{0:.2} -> {1:.2}] {2}", self.start, self.end, self.text);
+        let text = format!(
+            "[{0:.2} -> {1:.2}] {2}",
+            self.timestamp.start, self.timestamp.end, self.text
+        );
         let text = if is_finalized {
             if self.probability > 0.6 {
                 text.green()
@@ -92,7 +102,11 @@ impl Display for Transcription {
 
 impl Silence {
     fn format_styled(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let text = format!("[{0:.2} -> {1:.2}] [Silence]", self.start, self.end).yellow();
+        let text = format!(
+            "[{0:.2} -> {1:.2}] [Silence]",
+            self.timestamp.start, self.timestamp.end
+        )
+        .yellow();
 
         write!(f, "{text}")
     }

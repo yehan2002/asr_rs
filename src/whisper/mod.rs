@@ -3,7 +3,9 @@ mod logger;
 
 use whisper_rs::{WhisperError, WhisperSegment};
 
-use crate::{BackendImpl, Error, Result, Segment, Silence, Token, Transcription, models::Model};
+use crate::{
+    BackendImpl, Error, Result, Segment, Silence, Timestamp, Token, Transcription, models::Model,
+};
 
 pub use crate::whisper::config::{Config, VadModel, WhisperModel};
 
@@ -241,11 +243,13 @@ impl WhisperBackend {
         self.time_offset += silence_length;
         self.silence_duration += silence_length;
         if let Some(ref mut silence) = self.state.current_silence {
-            silence.end += silence_length;
+            silence.timestamp.end += silence_length;
         } else {
             self.state.current_silence = Some(Silence {
-                start: self.time_offset - self.silence_duration,
-                end: self.time_offset,
+                timestamp: Timestamp {
+                    start: self.time_offset - self.silence_duration,
+                    end: self.time_offset,
+                },
             })
         }
     }
@@ -296,11 +300,13 @@ fn parse_segment(segment: WhisperSegment, time_offset: f64) -> Result<Segment> {
     }
 
     let part = Segment {
-        start: start_time,
-        end: end_time,
         text: text.to_string(),
         tokens,
         probability: total_probability / n_tokens as f32,
+        timestamp: Timestamp {
+            start: start_time,
+            end: end_time,
+        },
     };
 
     Ok(part)
