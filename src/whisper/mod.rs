@@ -1,7 +1,7 @@
 mod config;
 mod logger;
 
-use whisper_rs::WhisperSegment;
+use whisper_rs::{WhisperError, WhisperSegment};
 
 use crate::{
     BackendImpl, Error, PartialTranscription, Result, Segment, Silence, Token, Transcription,
@@ -180,9 +180,12 @@ impl WhisperBackend {
 
     pub fn finish_transcribing(&mut self) -> Result<Transcription> {
         let whisper_params = self.whisper_full_params();
-        self.whisper
-            .full(whisper_params, &self.audio_buffer)
-            .map_err(Error::Transcribe)?;
+        let result = self.whisper.full(whisper_params, &self.audio_buffer);
+        if matches!(result, Err(WhisperError::NoSamples)) {
+            return Ok(Transcription::Partial(self.state.clone()));
+        }
+        result.map_err(Error::Transcribe)?;
+
         let n_segments = self.whisper.full_n_segments();
 
         for idx in 0..n_segments {
@@ -248,6 +251,12 @@ impl WhisperBackend {
                 end: self.time_offset,
             })
         }
+    }
+}
+
+impl Drop for WhisperBackend {
+    fn drop(&mut self) {
+        log::info!("Whisper backend has been shutdown")
     }
 }
 
