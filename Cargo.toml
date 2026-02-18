@@ -10,7 +10,7 @@ no_model_log=[]
 cuda=["whisper-rs/cuda"]
 vulkan=["whisper-rs/vulkan"]
 default=["model_download"]
-mic capture=["dep:cpal"]
+microphone=["dep:cpal"]
 
 [dependencies]
 colored = "3.1.1"

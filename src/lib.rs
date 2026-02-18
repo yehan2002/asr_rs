@@ -5,7 +5,7 @@ mod error;
 mod segment;
 pub mod whisper;
 
-#[cfg(feature = "mic capture")]
+#[cfg(feature = "microphone")]
 pub mod mic_util;
 
 pub use backend::Backend;

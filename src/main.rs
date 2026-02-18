@@ -1,4 +1,4 @@
-#[cfg(feature = "mic capture")]
+#[cfg(feature = "microphone")]
 fn main() {
     use asr_rs::{Backend, StreamTranscriber, mic_util, whisper};
 
@@ -11,7 +11,7 @@ fn main() {
     mic_util::mic_input(ts);
 }
 
-#[cfg(not(feature = "cpal_mic"))]
+#[cfg(not(feature = "microphone"))]
 fn main() {
     println!("cpal_mic feature is not enabled")
 }
