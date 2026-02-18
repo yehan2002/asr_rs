@@ -33,19 +33,12 @@ pub struct Silence {
 }
 
 #[derive(Debug, serde::Serialize, Clone)]
-pub struct PartialTranscription {
+pub struct Transcription {
     pub finalized: Vec<Segment>,
     pub silences: Vec<Silence>,
     pub processing: Vec<Segment>,
     pub current_silence: Option<Silence>,
     pub full_text: String,
-}
-
-#[derive(Debug, serde::Serialize)]
-pub enum Transcription {
-    Silence(Silence),
-    Partial(PartialTranscription),
-    Full { text: String },
 }
 
 impl Display for Segment {
@@ -81,27 +74,19 @@ impl Segment {
 
 impl Display for Transcription {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            Transcription::Silence(s) => {
-                write!(f, "[{:.2} -> {:.2}] [Silence]", s.start, s.end)
-            }
-            Transcription::Partial(p) => {
-                for part in &p.finalized {
-                    let _ = part.format_styled(f, true);
-                }
-
-                for part in &p.processing {
-                    let _ = part.format_styled(f, false);
-                }
-
-                if let Some(ref current_silence) = p.current_silence {
-                    let _ = current_silence.format_styled(f);
-                }
-
-                Ok(())
-            }
-            Transcription::Full { text } => write!(f, "{text}"),
+        for part in &self.finalized {
+            let _ = part.format_styled(f, true);
         }
+
+        for part in &self.processing {
+            let _ = part.format_styled(f, false);
+        }
+
+        if let Some(ref current_silence) = self.current_silence {
+            let _ = current_silence.format_styled(f);
+        }
+
+        Ok(())
     }
 }
 

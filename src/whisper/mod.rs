@@ -3,10 +3,7 @@ mod logger;
 
 use whisper_rs::{WhisperError, WhisperSegment};
 
-use crate::{
-    BackendImpl, Error, PartialTranscription, Result, Segment, Silence, Token, Transcription,
-    models::Model,
-};
+use crate::{BackendImpl, Error, Result, Segment, Silence, Token, Transcription, models::Model};
 
 pub use crate::whisper::config::{Config, VadModel, WhisperModel};
 
@@ -20,7 +17,7 @@ pub(crate) struct WhisperBackend {
     audio_buffer: Vec<f32>,
     silence_duration: f64,
 
-    state: PartialTranscription,
+    state: Transcription,
 
     config: Config,
 }
@@ -70,7 +67,7 @@ impl WhisperBackend {
             time_offset: 0.0,
             silence_duration: 0.0,
             config,
-            state: PartialTranscription {
+            state: Transcription {
                 finalized: vec![],
                 processing: vec![],
                 current_silence: None,
@@ -120,10 +117,10 @@ impl WhisperBackend {
                     self.audio_buffer.append(&mut audio_chunk);
                 }
 
-                return Ok(Transcription::Partial(self.state.clone()));
+                return Ok(self.state.clone());
             }
 
-            println!("No Vad segments. Flushing buffer...");
+            log::debug!("No Vad segments. Flushing buffer...");
         } else {
             self.clear_silence();
             log::debug!("Found Vad segments: {}", vad_segments);
@@ -162,7 +159,7 @@ impl WhisperBackend {
 
             for idx in 0..partials_start_idx {
                 let segment = self.get_whisper_segment(idx, time_offset)?;
-                log::info!("Finalized partial segment:\n {}", segment);
+                log::debug!("Finalized partial segment:\n {}", segment);
 
                 self.state.full_text.push_str(&segment.text);
                 self.state.finalized.push(segment);
@@ -175,14 +172,14 @@ impl WhisperBackend {
             self.state.processing.push(segment);
         }
 
-        Ok(Transcription::Partial(self.state.clone()))
+        Ok(self.state.clone())
     }
 
     pub fn finish_transcribing(&mut self) -> Result<Transcription> {
         let whisper_params = self.whisper_full_params();
         let result = self.whisper.full(whisper_params, &self.audio_buffer);
         if matches!(result, Err(WhisperError::NoSamples)) {
-            return Ok(Transcription::Partial(self.state.clone()));
+            return Ok(self.state.clone());
         }
         result.map_err(Error::Transcribe)?;
 
@@ -195,7 +192,7 @@ impl WhisperBackend {
             self.state.finalized.push(segment);
         }
 
-        Ok(Transcription::Partial(self.state.clone()))
+        Ok(self.state.clone())
     }
 
     /// Gets the whisper segment at the given index.
