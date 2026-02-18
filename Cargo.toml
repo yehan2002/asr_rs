@@ -6,6 +6,7 @@ edition = "2024"
 [features]
 bindgen=[]
 model_download=["dep:indicatif", "dep:ureq"]
+no_model_log=[]
 default=["model_download", ]
 
 [dependencies]

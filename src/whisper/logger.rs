@@ -2,11 +2,19 @@ use std::ffi;
 
 use log::{Level, log};
 
+#[cfg(feature = "no_model_log")]
+const NO_LOG: bool = true;
+#[cfg(not(feature = "no_model_log"))]
+const NO_LOG: bool = false;
+
 unsafe extern "C" fn log_cb(
     c_level: std::os::raw::c_uint,
     c_text: *const ::std::os::raw::c_char,
     _user_data: *mut ::std::os::raw::c_void,
 ) {
+    if NO_LOG {
+        return;
+    }
     /*
      Log levels:
     pub const ggml_log_level_GGML_LOG_LEVEL_NONE: ggml_log_level = 0;
