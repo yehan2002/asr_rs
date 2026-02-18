@@ -75,6 +75,7 @@ impl WhisperBackend {
                 current_silence: None,
                 silences: vec![],
                 full_text: String::new(),
+                is_complete: false,
             },
         }))
     }
@@ -193,6 +194,8 @@ impl WhisperBackend {
             self.state.full_text.push_str(&segment.text);
             self.state.finalized.push(segment);
         }
+
+        self.state.is_complete = true;
 
         Ok(self.state.clone())
     }

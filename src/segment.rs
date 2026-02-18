@@ -42,6 +42,7 @@ pub struct Transcription {
     pub processing: Vec<Segment>,
     pub current_silence: Option<Silence>,
     pub full_text: String,
+    pub is_complete: bool,
 }
 
 impl Display for Segment {
