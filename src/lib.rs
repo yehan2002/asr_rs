@@ -3,8 +3,10 @@
 mod backend;
 mod error;
 mod segment;
-pub mod util;
 pub mod whisper;
+
+#[cfg(feature = "mic capture")]
+pub mod mic_util;
 
 pub use backend::Backend;
 pub(crate) use backend::BackendImpl;
