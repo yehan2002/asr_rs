@@ -15,7 +15,7 @@ impl BackendImpl {
         }
     }
 
-    pub fn finish_transcribing(&mut self) -> Result<Transcription> {
+    pub fn finish_transcribing(self) -> Result<Transcription> {
         match self {
             BackendImpl::Whisper(w) => w.finish_transcribing(),
         }

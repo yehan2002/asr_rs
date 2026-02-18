@@ -177,7 +177,7 @@ impl WhisperBackend {
         Ok(self.state.clone())
     }
 
-    pub fn finish_transcribing(&mut self) -> Result<Transcription> {
+    pub fn finish_transcribing(mut self) -> Result<Transcription> {
         let whisper_params = self.whisper_full_params();
         let result = self.whisper.full(whisper_params, &self.audio_buffer);
         if matches!(result, Err(WhisperError::NoSamples)) {

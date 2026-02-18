@@ -29,7 +29,7 @@ impl StreamTranscriber {
         self.backend.transcribe_chunk(vec)
     }
 
-    pub fn finish_transcribing(&mut self) -> Result<Transcription> {
+    pub fn finish_transcribing(self) -> Result<Transcription> {
         self.backend.finish_transcribing()
     }
 }
