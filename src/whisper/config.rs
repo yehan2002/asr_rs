@@ -1,8 +1,11 @@
 use std::path::PathBuf;
 
+use serde::Deserialize;
+
 use crate::models::Model;
 
 /// Config for the whisper ASR backend
+#[derive(Debug, Deserialize, Clone)]
 pub struct Config {
     /// The model to use.
     ///  The model must be available in the `model_dir`/whisper/ directory.
@@ -29,6 +32,7 @@ impl Default for Config {
 }
 
 /// Supported whisper models
+#[derive(Debug, Deserialize, Clone)]
 pub enum WhisperModel {
     Small,
     Tiny,
@@ -39,6 +43,7 @@ pub enum WhisperModel {
     Custom { name: String, base_url: String },
 }
 
+#[derive(Debug, Deserialize, Clone)]
 pub enum VadModel {
     Silero,
     Custom { name: String, base_url: String },
