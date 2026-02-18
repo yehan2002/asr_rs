@@ -33,7 +33,7 @@ impl WhisperBackend {
         logger::setup_whisper_logger();
 
         let params = whisper_rs::WhisperContextParameters {
-            #[cfg(feature = "cuda")]
+            #[cfg(any(feature = "cuda", feature = "vulkan"))]
             use_gpu: true,
             ..Default::default()
         };
