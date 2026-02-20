@@ -35,6 +35,13 @@ pub struct Timestamp {
     pub end: f64,
 }
 
+impl Timestamp {
+    #[inline(always)]
+    pub fn duration(&self) -> f64 {
+        self.end - self.start
+    }
+}
+
 #[derive(Debug, serde::Serialize, Clone)]
 pub struct Transcription {
     pub finalized: Vec<Segment>,
@@ -43,6 +50,71 @@ pub struct Transcription {
     pub current_silence: Option<Silence>,
     pub full_text: String,
     pub is_complete: bool,
+}
+
+impl Default for Transcription {
+    fn default() -> Self {
+        Self {
+            finalized: Default::default(),
+            silences: Default::default(),
+            processing: Default::default(),
+            current_silence: Default::default(),
+            full_text: Default::default(),
+            is_complete: Default::default(),
+        }
+    }
+}
+
+#[derive(Debug, serde::Serialize)]
+#[serde(tag = "type", rename_all = "snake_case")]
+pub enum Line<'a> {
+    Complete(&'a Segment),
+    Partial(&'a Segment),
+    Silence(&'a Silence),
+}
+
+impl<'a> Line<'a> {
+    pub fn text(&self) -> &'a str {
+        match self {
+            Line::Complete(segment) => &segment.text,
+            Line::Partial(segment) => &segment.text,
+            Line::Silence(_) => "[Silence]",
+        }
+    }
+
+    pub fn timestamp(&self) -> &'a Timestamp {
+        match self {
+            Line::Complete(segment) => &segment.timestamp,
+            Line::Partial(segment) => &segment.timestamp,
+            Line::Silence(silence) => &silence.timestamp,
+        }
+    }
+}
+
+impl<'a> Transcription {
+    pub fn lines(&'a self) -> Vec<Line<'a>> {
+        let mut lines = Vec::with_capacity(self.finalized.len() + self.processing.len() + 1);
+
+        for seg in &self.finalized {
+            lines.push(Line::Complete(seg));
+        }
+
+        for seg in &self.processing {
+            lines.push(Line::Partial(seg));
+        }
+
+        for seg in &self.silences {
+            lines.push(Line::Silence(seg));
+        }
+
+        lines.sort_by(|a, b| a.timestamp().start.total_cmp(&b.timestamp().start));
+
+        if let Some(ref seg) = self.current_silence {
+            lines.push(Line::Silence(seg));
+        }
+
+        lines
+    }
 }
 
 impl Display for Segment {
