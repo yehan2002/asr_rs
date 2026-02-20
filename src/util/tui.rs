@@ -127,7 +127,8 @@ impl Widget for &App {
 
         let items = self
             .transcript
-            .lines()
+            .clone()
+            .into_lines()
             .iter()
             .map(line_to_list_item)
             .collect::<Vec<_>>();
@@ -145,7 +146,7 @@ impl Widget for &App {
     }
 }
 
-fn line_to_list_item(line: &crate::Line<'_>) -> Text<'static> {
+fn line_to_list_item(line: &crate::Line) -> Text<'static> {
     let timestamp = line.timestamp();
     let text = format!(
         "[{0:.2} -> {1:.2}] {2}",

@@ -67,14 +67,14 @@ impl Default for Transcription {
 
 #[derive(Debug, serde::Serialize)]
 #[serde(tag = "type", rename_all = "snake_case")]
-pub enum Line<'a> {
-    Complete(&'a Segment),
-    Partial(&'a Segment),
-    Silence(&'a Silence),
+pub enum Line {
+    Complete(Segment),
+    Partial(Segment),
+    Silence(Silence),
 }
 
-impl<'a> Line<'a> {
-    pub fn text(&self) -> &'a str {
+impl Line {
+    pub fn text(&self) -> &str {
         match self {
             Line::Complete(segment) => &segment.text,
             Line::Partial(segment) => &segment.text,
@@ -82,7 +82,7 @@ impl<'a> Line<'a> {
         }
     }
 
-    pub fn timestamp(&self) -> &'a Timestamp {
+    pub fn timestamp(&self) -> &Timestamp {
         match self {
             Line::Complete(segment) => &segment.timestamp,
             Line::Partial(segment) => &segment.timestamp,
@@ -91,25 +91,25 @@ impl<'a> Line<'a> {
     }
 }
 
-impl<'a> Transcription {
-    pub fn lines(&'a self) -> Vec<Line<'a>> {
+impl Transcription {
+    pub fn into_lines(self) -> Vec<Line> {
         let mut lines = Vec::with_capacity(self.finalized.len() + self.processing.len() + 1);
 
-        for seg in &self.finalized {
+        for seg in self.finalized {
             lines.push(Line::Complete(seg));
         }
 
-        for seg in &self.processing {
+        for seg in self.processing {
             lines.push(Line::Partial(seg));
         }
 
-        for seg in &self.silences {
+        for seg in self.silences {
             lines.push(Line::Silence(seg));
         }
 
         lines.sort_by(|a, b| a.timestamp().start.total_cmp(&b.timestamp().start));
 
-        if let Some(ref seg) = self.current_silence {
+        if let Some(seg) = self.current_silence {
             lines.push(Line::Silence(seg));
         }
 
