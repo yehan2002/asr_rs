@@ -15,12 +15,11 @@ pub(crate) struct WhisperBackend {
     vad: whisper_rs::WhisperVadContext,
     whisper: whisper_rs::WhisperState,
 
-    time_offset: f64,
-    audio_buffer: Vec<f32>,
-    silence_duration: f64,
+    processed_time: f64,
+    total_time: f64,
+    flush_threshold: f64,
 
-    chunk_start: f64,
-    chunk_end: f64,
+    audio_buffer: Vec<f32>,
 
     state: Transcription,
 
@@ -69,21 +68,11 @@ impl WhisperBackend {
             whisper: state,
             vad,
             audio_buffer: Vec::new(),
-            time_offset: 0.0,
-            silence_duration: 0.0,
-
-            chunk_start: 0.0,
-            chunk_end: 0.0,
-
             config,
-            state: Transcription {
-                finalized: vec![],
-                processing: vec![],
-                current_silence: None,
-                silences: vec![],
-                full_text: String::new(),
-                is_complete: false,
-            },
+            state: Default::default(),
+            processed_time: 0.0,
+            total_time: 0.0,
+            flush_threshold: 0.0,
         }))
     }
 
@@ -106,11 +95,10 @@ impl WhisperBackend {
     }
 
     pub fn transcribe_chunk(&mut self, mut audio_chunk: Vec<f32>) -> Result<Transcription> {
-        self.chunk_start = self.chunk_end;
-        self.chunk_end += samples_to_duration(audio_chunk.len());
-
         let vad_params = whisper_rs::WhisperVadParams::new();
-        let whisper_params = self.whisper_full_params();
+
+        let chunk_duration = samples_to_duration(audio_chunk.len());
+        self.total_time += chunk_duration;
 
         let vad_result = self
             .vad
@@ -118,48 +106,70 @@ impl WhisperBackend {
             .map_err(Error::Vad)?;
 
         let vad_segments = vad_result.num_segments();
-        if vad_segments <= 0 {
-            if self.audio_buffer.is_empty() || self.silence_duration < self.config.silence_threshold
-            {
-                log::debug!("No Vad segments. Skipping...");
 
-                // update silence durations
-                self.add_silence(audio_chunk.len());
+        let is_flush = vad_segments == 0 && self.should_flush(chunk_duration);
+        if is_flush {
+            log::debug!("No Vad segments. Flushing buffer...");
+        } else if vad_segments <= 0 {
+            log::debug!("No Vad segments. Skipping...");
 
-                if !self.audio_buffer.is_empty() {
-                    // add the empty audio to break sentences
-                    self.audio_buffer.append(&mut audio_chunk);
-                }
-
-                return Ok(self.state.clone());
+            if !self.audio_buffer.is_empty() {
+                // add the empty audio to break sentences
+                self.audio_buffer.append(&mut audio_chunk);
+                self.flush_threshold += chunk_duration;
+            } else {
+                // already silent update timestamps only
+                self.processed_time += chunk_duration;
             }
 
-            log::debug!("No Vad segments. Flushing buffer...");
+            let current_silence = self.state.current_silence.get_or_insert_with(|| Silence {
+                timestamp: Timestamp {
+                    start: self.total_time - chunk_duration,
+                    end: self.total_time - chunk_duration,
+                },
+            });
+
+            current_silence.timestamp.end += chunk_duration;
+
+            return Ok(self.state.clone());
         } else {
             self.clear_silence();
             log::debug!("Found Vad segments: {}", vad_segments);
         }
 
-        let flush = vad_segments == 0;
-
         self.audio_buffer.append(&mut audio_chunk);
+        self.run_asr(is_flush)?;
 
-        self.whisper
-            .full(whisper_params, &self.audio_buffer)
-            .map_err(Error::Transcribe)?;
+        Ok(self.state.clone())
+    }
+
+    pub fn finish_transcribing(mut self) -> Result<Transcription> {
+        self.run_asr(true)?;
+        self.state.is_complete = true;
+        Ok(self.state.clone())
+    }
+
+    fn run_asr(&mut self, finalize_all: bool) -> Result<()> {
+        let whisper_params = self.whisper_full_params();
+
+        let result = self.whisper.full(whisper_params, &self.audio_buffer);
+        if finalize_all && result.is_err() && matches!(result, Err(WhisperError::NoSamples)) {
+            return Ok(());
+        }
+        result.map_err(Error::Transcribe)?;
+
         let n_segments = self.whisper.full_n_segments();
         let mut partials_start_idx = 0;
+        let time_offset = self.processed_time;
 
-        let time_offset = self.time_offset;
-
-        if n_segments > self.config.segment_buffer || flush {
-            partials_start_idx = if flush {
+        if n_segments > self.config.segment_buffer || finalize_all {
+            partials_start_idx = if finalize_all {
                 n_segments
             } else {
                 n_segments - self.config.segment_buffer
             };
 
-            if flush {
+            if finalize_all {
                 self.drop_samples_from_buffer(self.audio_buffer.len());
             } else {
                 let segment = self
@@ -178,6 +188,10 @@ impl WhisperBackend {
                 self.state.full_text.push_str(&segment.text);
                 self.state.finalized.push(segment);
             }
+
+            if finalize_all {
+                self.processed_time = self.total_time;
+            }
         }
 
         self.state.processing.clear();
@@ -186,29 +200,7 @@ impl WhisperBackend {
             self.state.processing.push(segment);
         }
 
-        Ok(self.state.clone())
-    }
-
-    pub fn finish_transcribing(mut self) -> Result<Transcription> {
-        let whisper_params = self.whisper_full_params();
-        let result = self.whisper.full(whisper_params, &self.audio_buffer);
-        if matches!(result, Err(WhisperError::NoSamples)) {
-            return Ok(self.state.clone());
-        }
-        result.map_err(Error::Transcribe)?;
-
-        let n_segments = self.whisper.full_n_segments();
-
-        for idx in 0..n_segments {
-            let segment = self.get_whisper_segment(idx, self.time_offset)?;
-
-            self.state.full_text.push_str(&segment.text);
-            self.state.finalized.push(segment);
-        }
-
-        self.state.is_complete = true;
-
-        Ok(self.state.clone())
+        Ok(())
     }
 
     /// Gets the whisper segment at the given index.
@@ -238,36 +230,27 @@ impl WhisperBackend {
             log::debug!("cleared audio buffer",);
         }
 
-        self.time_offset += samples_to_duration(n);
+        self.processed_time += samples_to_duration(n);
     }
 
     /// Clears the current silence segment and adds it to the history.
     fn clear_silence(&mut self) {
-        if self.silence_duration > 0.0 {
-            if let Some(silence) = self.state.current_silence.take() {
-                if self.silence_duration > self.config.silence_threshold {
-                    self.state.silences.push(silence);
-                }
+        if self.state.current_silence.is_some()
+            && let Some(silence) = self.state.current_silence.take()
+        {
+            let silence_duration = silence.timestamp.duration();
+            if silence_duration > self.config.silence_threshold {
+                self.state.silences.push(silence);
             }
-            self.silence_duration = 0.0;
         }
+
+        self.flush_threshold = 0.0;
     }
 
-    /// update silence durations
-    fn add_silence(&mut self, n_samples: usize) {
-        let silence_length = samples_to_duration(n_samples);
-
-        self.time_offset += silence_length;
-        self.silence_duration += silence_length;
-
-        let silence = self.state.current_silence.get_or_insert_with(|| Silence {
-            timestamp: Timestamp {
-                start: self.chunk_start,
-                end: self.chunk_start,
-            },
-        });
-
-        silence.timestamp.end += silence_length;
+    #[inline(always)]
+    fn should_flush(&self, chunk_duration: f64) -> bool {
+        self.flush_threshold + chunk_duration >= self.config.silence_threshold
+            && self.audio_buffer.len() != 0
     }
 }
 
