@@ -19,6 +19,9 @@ pub(crate) struct WhisperBackend {
     audio_buffer: Vec<f32>,
     silence_duration: f64,
 
+    chunk_start: f64,
+    chunk_end: f64,
+
     state: Transcription,
 
     config: Config,
@@ -68,6 +71,10 @@ impl WhisperBackend {
             audio_buffer: Vec::new(),
             time_offset: 0.0,
             silence_duration: 0.0,
+
+            chunk_start: 0.0,
+            chunk_end: 0.0,
+
             config,
             state: Transcription {
                 finalized: vec![],
@@ -99,6 +106,9 @@ impl WhisperBackend {
     }
 
     pub fn transcribe_chunk(&mut self, mut audio_chunk: Vec<f32>) -> Result<Transcription> {
+        self.chunk_start = self.chunk_end;
+        self.chunk_end += samples_to_duration(audio_chunk.len());
+
         let vad_params = whisper_rs::WhisperVadParams::new();
         let whisper_params = self.whisper_full_params();
 
@@ -246,18 +256,18 @@ impl WhisperBackend {
     /// update silence durations
     fn add_silence(&mut self, n_samples: usize) {
         let silence_length = samples_to_duration(n_samples);
+
         self.time_offset += silence_length;
         self.silence_duration += silence_length;
-        if let Some(ref mut silence) = self.state.current_silence {
-            silence.timestamp.end += silence_length;
-        } else {
-            self.state.current_silence = Some(Silence {
-                timestamp: Timestamp {
-                    start: self.time_offset - silence_length,
-                    end: self.time_offset,
-                },
-            })
-        }
+
+        let silence = self.state.current_silence.get_or_insert_with(|| Silence {
+            timestamp: Timestamp {
+                start: self.chunk_start,
+                end: self.chunk_start,
+            },
+        });
+
+        silence.timestamp.end += silence_length;
     }
 }
 
