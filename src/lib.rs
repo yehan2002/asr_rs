@@ -5,8 +5,7 @@ mod error;
 mod segment;
 pub mod whisper;
 
-#[cfg(feature = "microphone")]
-pub mod mic_util;
+pub mod util;
 
 pub use backend::Backend;
 pub(crate) use backend::BackendImpl;

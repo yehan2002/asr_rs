@@ -9,8 +9,9 @@ model_download=["dep:indicatif", "dep:ureq"]
 no_model_log=[]
 cuda=["whisper-rs/cuda"]
 vulkan=["whisper-rs/vulkan"]
-default=["model_download"]
 microphone=["dep:cpal"]
+tui=["dep:ratatui", "microphone"]
+default=["model_download"]
 
 [dependencies]
 colored = "3.1.1"
@@ -21,3 +22,4 @@ whisper-rs = {version="0.15.1"}
 cpal = {version="0.17.1",optional=true}
 indicatif = {version="0.18.4",optional=true}
 ureq = { version = "3.2.0", optional = true }
+ratatui = { version ="0.30.0", optional = true }
