@@ -18,6 +18,9 @@ pub struct Config {
     /// The amount of segments to buffer when processing audio chunks.
     /// Higher values give better transcription quality at the cost of processing time.
     pub segment_buffer: i32,
+    /// The number of seconds of silence before a silence segment is created.
+    /// The audio buffer will also be flushed after this amount of silence.
+    pub silence_threshold: f64,
 }
 
 impl Default for Config {
@@ -27,6 +30,7 @@ impl Default for Config {
             vad: VadModel::Silero,
             model_dir: PathBuf::from("./models"),
             segment_buffer: 2,
+            silence_threshold: 3.0,
         }
     }
 }

@@ -109,7 +109,8 @@ impl WhisperBackend {
 
         let vad_segments = vad_result.num_segments();
         if vad_segments <= 0 {
-            if self.audio_buffer.is_empty() || self.silence_duration < 3.0 {
+            if self.audio_buffer.is_empty() || self.silence_duration < self.config.silence_threshold
+            {
                 log::debug!("No Vad segments. Skipping...");
 
                 // update silence durations
@@ -234,7 +235,9 @@ impl WhisperBackend {
     fn clear_silence(&mut self) {
         if self.silence_duration > 0.0 {
             if let Some(silence) = self.state.current_silence.take() {
-                self.state.silences.push(silence);
+                if self.silence_duration > self.config.silence_threshold {
+                    self.state.silences.push(silence);
+                }
             }
             self.silence_duration = 0.0;
         }
@@ -250,7 +253,7 @@ impl WhisperBackend {
         } else {
             self.state.current_silence = Some(Silence {
                 timestamp: Timestamp {
-                    start: self.time_offset - self.silence_duration,
+                    start: self.time_offset - silence_length,
                     end: self.time_offset,
                 },
             })
