@@ -13,6 +13,7 @@ pub(crate) mod models;
 pub use config::{BackendConfig, Config};
 pub use segment::*;
 
+#[derive(Debug, Clone)]
 pub struct Transcriber {
     cfg: Config,
 }
