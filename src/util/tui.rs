@@ -3,7 +3,7 @@ use std::time::Duration;
 use std::{io, thread};
 
 use crate::util::mic_input;
-use crate::{Backend, StreamTranscriber, Transcription, whisper};
+use crate::{BackendConfig, StreamTranscriber, Transcription, whisper};
 use ratatui::style::{Color, Style};
 use ratatui::text::Text;
 use ratatui::widgets::{self, List, ListState};
@@ -32,15 +32,17 @@ pub fn run() -> std::io::Result<()> {
 
 impl App {
     pub fn run(&mut self, terminal: &mut ratatui::DefaultTerminal) -> io::Result<()> {
-        let config = whisper::Config {
-            model: whisper::WhisperModel::Medium,
-            ..Default::default()
+        let config = crate::Config {
+            backend: BackendConfig::Whisper(whisper::Config {
+                model: whisper::WhisperModel::Medium,
+                ..Default::default()
+            }),
         };
 
         let (ts_tx, ts_rx) = mpsc::sync_channel(0);
 
         thread::spawn(move || {
-            let mut ts = StreamTranscriber::create(Backend::Whisper(config)).unwrap();
+            let mut ts = StreamTranscriber::create(config).unwrap();
             let (stream, audio_rx) = mic_input();
 
             while let Ok(chunk) = audio_rx.recv() {
