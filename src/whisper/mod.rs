@@ -6,7 +6,7 @@ use std::pin::Pin;
 use whisper_rs::{WhisperError, WhisperSegment};
 
 use crate::{
-    BackendImpl, Error, Result, Segment, Silence, Timestamp, Token, Transcription, models::Model,
+    Backend, Error, Result, Segment, Silence, Timestamp, Token, Transcription, models::Model,
 };
 
 pub use crate::whisper::config::{Config, VadModel, WhisperModel};
@@ -29,9 +29,8 @@ pub(crate) struct WhisperBackend {
 }
 
 impl WhisperBackend {
-    pub fn new(config: Config) -> Result<BackendImpl> {
+    pub fn new(config: Config) -> Result<Backend> {
         let model_path = config.model.resolve_model(&config.model_dir)?;
-
         let vad_path = config.vad.resolve_model(&config.model_dir)?;
 
         logger::setup_whisper_logger();
@@ -39,6 +38,7 @@ impl WhisperBackend {
         let params = whisper_rs::WhisperContextParameters {
             #[cfg(any(feature = "cuda", feature = "vulkan"))]
             use_gpu: true,
+
             ..Default::default()
         };
 
@@ -66,7 +66,7 @@ impl WhisperBackend {
             error: Box::new(e),
         })?;
 
-        Ok(BackendImpl::Whisper(Pin::new(Box::new(WhisperBackend {
+        Ok(Backend::Whisper(Pin::new(Box::new(WhisperBackend {
             whisper: state,
             vad,
             audio_buffer: Vec::new(),
@@ -223,7 +223,7 @@ impl WhisperBackend {
 
     /// Removes the first `n` samples from the audio buffer.
     /// If n is larger than the total number of frames, the total number is used instead.
-    /// This also updates the time_offset of the buffer.
+    /// This also updates the processed_time.
     fn drop_samples_from_buffer(&mut self, mut n: usize) {
         if n < self.audio_buffer.len() {
             let orig_size = self.audio_buffer.len();

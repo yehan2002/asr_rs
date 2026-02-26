@@ -1,14 +1,16 @@
 #[cfg(all(feature = "microphone", not(feature = "tui")))]
 fn main() {
     use asr_rs::util;
-    use asr_rs::{Backend, StreamTranscriber, whisper};
+    use asr_rs::{BackendConfig, StreamTranscriber, whisper};
 
-    let config = whisper::Config {
-        model: whisper::WhisperModel::Medium,
-        ..Default::default()
+    let config = asr_rs::Config {
+        backend: BackendConfig::Whisper(whisper::Config {
+            model: whisper::WhisperModel::Medium,
+            ..Default::default()
+        }),
     };
 
-    let mut ts = StreamTranscriber::create(Backend::Whisper(config)).unwrap();
+    let mut ts = StreamTranscriber::create(config).unwrap();
     let (stream, audio_rx) = util::mic_input();
 
     while let Ok(chunk) = audio_rx.recv() {

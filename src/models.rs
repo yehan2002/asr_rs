@@ -33,11 +33,12 @@ pub(crate) trait Model {
 #[cfg(not(feature = "model_download"))]
 fn download_model(model_name: String, out_path: PathBuf, url: String) -> Result<()> {
     Err(Error::ModelNotFound {
-        model: model.model_type.to_owned(),
-        path: model_path_str,
+        model: model_name,
+        path: out_path.to_string_lossy().into_owned(),
         url: url,
     })
 }
+
 #[cfg(feature = "model_download")]
 fn download_model(model_name: String, out_path: PathBuf, url: String) -> Result<()> {
     // create parent dir
@@ -47,7 +48,7 @@ fn download_model(model_name: String, out_path: PathBuf, url: String) -> Result<
     let mut tmp_path = out_path.clone();
     tmp_path.add_extension(".tmp");
 
-    println!("Downloading {model_name} from {url}");
+    log::info!("Downloading {model_name} from {url}");
 
     let response = ureq::get(url)
         .call()
