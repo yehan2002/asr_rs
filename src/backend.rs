@@ -1,3 +1,5 @@
+use std::pin::Pin;
+
 use crate::{Result, Transcription, whisper};
 
 pub enum Backend {
@@ -5,7 +7,7 @@ pub enum Backend {
 }
 
 pub(crate) enum BackendImpl {
-    Whisper(whisper::WhisperBackend),
+    Whisper(Pin<Box<whisper::WhisperBackend>>),
 }
 
 impl BackendImpl {

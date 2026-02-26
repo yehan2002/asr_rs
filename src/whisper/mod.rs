@@ -1,6 +1,8 @@
 mod config;
 mod logger;
 
+use std::pin::Pin;
+
 use whisper_rs::{WhisperError, WhisperSegment};
 
 use crate::{
@@ -64,7 +66,7 @@ impl WhisperBackend {
             error: Box::new(e),
         })?;
 
-        Ok(BackendImpl::Whisper(WhisperBackend {
+        Ok(BackendImpl::Whisper(Pin::new(Box::new(WhisperBackend {
             whisper: state,
             vad,
             audio_buffer: Vec::new(),
@@ -73,7 +75,7 @@ impl WhisperBackend {
             processed_time: 0.0,
             total_time: 0.0,
             flush_threshold: 0.0,
-        }))
+        }))))
     }
 
     /// the params to use for ` WhisperState.full`
