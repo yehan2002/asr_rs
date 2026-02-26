@@ -10,16 +10,15 @@ enum Task {
 
 pub struct AsyncStreamTranscriber {
     sender: Sender<Task>,
-    handle: thread::JoinHandle<()>,
 }
 
 impl AsyncStreamTranscriber {
-    pub fn create(cfg: Config) -> Result<Self> {
+    pub(crate) async fn create(cfg: Config) -> Result<Self> {
         let (tx, mut rx) = tokio::sync::mpsc::channel(1);
 
         let (init_tx, init_rx) = oneshot::channel::<Result<()>>();
 
-        let handle = thread::spawn(move || {
+        thread::spawn(move || {
             let mut transcriber = match Backend::from_config(cfg.backend) {
                 Ok(t) => t,
                 Err(e) => {
@@ -48,13 +47,10 @@ impl AsyncStreamTranscriber {
         });
 
         init_rx
-            .blocking_recv()
+            .await
             .map_err(|e| Error::WorkerShutdown(Box::new(e)))??;
 
-        Ok(Self {
-            sender: tx,
-            handle: handle,
-        })
+        Ok(Self { sender: tx })
     }
 
     pub async fn transcribe_audio(&self, vec: Vec<f32>) -> Result<Transcription> {

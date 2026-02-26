@@ -48,4 +48,9 @@ impl Transcriber {
     pub fn create_stream(&self) -> Result<StreamTranscriber> {
         return StreamTranscriber::create(self.cfg.clone());
     }
+
+    #[cfg(feature = "async")]
+    pub async fn create_async_stream(&self) -> Result<AsyncStreamTranscriber> {
+        return AsyncStreamTranscriber::create(self.cfg.clone()).await;
+    }
 }

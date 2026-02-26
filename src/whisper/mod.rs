@@ -1,8 +1,6 @@
 mod config;
 mod logger;
 
-use std::pin::Pin;
-
 use whisper_rs::{WhisperError, WhisperSegment};
 
 use crate::{
