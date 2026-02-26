@@ -4,6 +4,13 @@ mod backend;
 mod config;
 mod error;
 mod segment;
+mod stream;
+
+#[cfg(feature = "async")]
+mod stream_async;
+#[cfg(feature = "async")]
+pub use stream_async::*;
+
 pub mod util;
 pub mod whisper;
 
@@ -12,6 +19,7 @@ pub use error::{Error, Result};
 pub(crate) mod models;
 pub use config::{BackendConfig, Config};
 pub use segment::*;
+pub use stream::*;
 
 #[derive(Debug, Clone)]
 pub struct Transcriber {
@@ -39,27 +47,5 @@ impl Transcriber {
     /// Create a transcriber that can trascribe a stream of audio chunks.
     pub fn create_stream(&self) -> Result<StreamTranscriber> {
         return StreamTranscriber::create(self.cfg.clone());
-    }
-}
-
-pub struct StreamTranscriber {
-    backend: Backend,
-}
-
-impl StreamTranscriber {
-    pub fn create(cfg: Config) -> Result<Self> {
-        let result = match cfg.backend {
-            BackendConfig::Whisper(config) => whisper::WhisperBackend::new(config),
-        }?;
-
-        Ok(Self { backend: result })
-    }
-
-    pub fn transcribe_audio(&mut self, vec: Vec<f32>) -> Result<Transcription> {
-        self.backend.transcribe_chunk(vec)
-    }
-
-    pub fn finish_transcribing(self, last_chunk: Option<Vec<f32>>) -> Result<Transcription> {
-        self.backend.finish_transcribing(last_chunk)
     }
 }

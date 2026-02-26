@@ -1,12 +1,16 @@
-use std::pin::Pin;
-
-use crate::{Result, Transcription, whisper};
+use crate::{BackendConfig, Result, Transcription, whisper};
 
 pub(crate) enum Backend {
-    Whisper(Pin<Box<whisper::WhisperBackend>>),
+    Whisper(whisper::WhisperBackend),
 }
 
 impl Backend {
+    pub fn from_config(cfg: BackendConfig) -> Result<Self> {
+        match cfg {
+            BackendConfig::Whisper(config) => whisper::WhisperBackend::new(config),
+        }
+    }
+
     pub fn transcribe_chunk(&mut self, audio_chunk: Vec<f32>) -> Result<Transcription> {
         match self {
             Backend::Whisper(w) => w.transcribe_chunk(audio_chunk),

@@ -66,7 +66,7 @@ impl WhisperBackend {
             error: Box::new(e),
         })?;
 
-        Ok(Backend::Whisper(Pin::new(Box::new(WhisperBackend {
+        Ok(Backend::Whisper(WhisperBackend {
             whisper: state,
             vad,
             audio_buffer: Vec::new(),
@@ -75,7 +75,7 @@ impl WhisperBackend {
             processed_time: 0.0,
             total_time: 0.0,
             flush_threshold: 0.0,
-        }))))
+        }))
     }
 
     /// the params to use for ` WhisperState.full`
