@@ -30,7 +30,7 @@ impl StreamTranscriber {
         self.backend.transcribe_chunk(vec)
     }
 
-    pub fn finish_transcribing(self) -> Result<Transcription> {
-        self.backend.finish_transcribing()
+    pub fn finish_transcribing(self, last_chunk: Option<Vec<f32>>) -> Result<Transcription> {
+        self.backend.finish_transcribing(last_chunk)
     }
 }

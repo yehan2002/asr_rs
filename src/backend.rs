@@ -15,9 +15,9 @@ impl BackendImpl {
         }
     }
 
-    pub fn finish_transcribing(self) -> Result<Transcription> {
+    pub fn finish_transcribing(self, last_chunk: Option<Vec<f32>>) -> Result<Transcription> {
         match self {
-            BackendImpl::Whisper(w) => w.finish_transcribing(),
+            BackendImpl::Whisper(mut w) => w.finish_transcribing(last_chunk),
         }
     }
 }

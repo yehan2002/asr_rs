@@ -143,7 +143,13 @@ impl WhisperBackend {
         Ok(self.state.clone())
     }
 
-    pub fn finish_transcribing(mut self) -> Result<Transcription> {
+    pub fn finish_transcribing(&mut self, final_chunk: Option<Vec<f32>>) -> Result<Transcription> {
+        if let Some(mut samples) = final_chunk {
+            let chunk_duration = samples_to_duration(samples.len());
+            self.total_time += chunk_duration;
+            self.audio_buffer.append(&mut samples);
+        }
+
         self.run_asr(true)?;
         self.state.is_complete = true;
         Ok(self.state.clone())
