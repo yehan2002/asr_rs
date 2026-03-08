@@ -245,6 +245,7 @@ impl WhisperBackend {
             && let Some(silence) = self.state.current_silence.take()
         {
             let silence_duration = silence.timestamp.duration();
+            self.processed_time += silence_duration;
             if silence_duration > self.config.silence_threshold {
                 self.state.silences.push(silence);
             }
