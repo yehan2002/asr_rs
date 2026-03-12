@@ -10,7 +10,7 @@ cuda=["whisper-rs/cuda"]
 vulkan=["whisper-rs/vulkan"]
 tui=["dep:ratatui", "dep:cpal", "dep:anyhow"]
 async=["dep:tokio"]
-default=["model_download", "async", "tui"]
+default=["model_download"]
 
 [dependencies]
 colored = "3.1.1"
