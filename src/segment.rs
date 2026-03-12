@@ -36,13 +36,13 @@ pub struct Timestamp {
 }
 
 impl Timestamp {
-    #[inline(always)]
+    #[must_use]
     pub fn duration(&self) -> f64 {
         self.end - self.start
     }
 }
 
-#[derive(Debug, serde::Serialize, Clone)]
+#[derive(Debug, serde::Serialize, Clone, Default)]
 pub struct Transcription {
     pub finalized: Vec<Segment>,
     pub silences: Vec<Silence>,
@@ -50,19 +50,6 @@ pub struct Transcription {
     pub current_silence: Option<Silence>,
     pub full_text: String,
     pub is_complete: bool,
-}
-
-impl Default for Transcription {
-    fn default() -> Self {
-        Self {
-            finalized: Default::default(),
-            silences: Default::default(),
-            processing: Default::default(),
-            current_silence: Default::default(),
-            full_text: Default::default(),
-            is_complete: Default::default(),
-        }
-    }
 }
 
 #[derive(Debug, serde::Serialize)]
@@ -74,24 +61,25 @@ pub enum Line {
 }
 
 impl Line {
+    #[must_use]
     pub fn text(&self) -> &str {
         match self {
-            Line::Complete(segment) => &segment.text,
-            Line::Partial(segment) => &segment.text,
+            Line::Complete(segment) | Line::Partial(segment) => &segment.text,
             Line::Silence(_) => "[Silence]",
         }
     }
 
+    #[must_use]
     pub fn timestamp(&self) -> &Timestamp {
         match self {
-            Line::Complete(segment) => &segment.timestamp,
-            Line::Partial(segment) => &segment.timestamp,
+            Line::Complete(segment) | Line::Partial(segment) => &segment.timestamp,
             Line::Silence(silence) => &silence.timestamp,
         }
     }
 }
 
 impl Transcription {
+    #[must_use]
     pub fn into_lines(self) -> Vec<Line> {
         let mut lines = Vec::with_capacity(self.finalized.len() + self.processing.len() + 1);
 

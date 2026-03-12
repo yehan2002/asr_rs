@@ -3,9 +3,7 @@ mod logger;
 
 use whisper_rs::{WhisperError, WhisperSegment};
 
-use crate::{
-    Backend, Error, Result, Segment, Silence, Timestamp, Token, Transcription, models::Model,
-};
+use crate::{Error, Result, Segment, Silence, Timestamp, Token, Transcription, models::Model};
 
 pub use crate::whisper::config::{Config, VadModel, WhisperModel};
 
@@ -27,7 +25,7 @@ pub(crate) struct WhisperBackend {
 }
 
 impl WhisperBackend {
-    pub fn new(config: Config) -> Result<Backend> {
+    pub fn new(config: Config) -> Result<Self> {
         let model_path = config.model.resolve_model(&config.model_dir)?;
         let vad_path = config.vad.resolve_model(&config.model_dir)?;
 
@@ -64,20 +62,20 @@ impl WhisperBackend {
             error: Box::new(e),
         })?;
 
-        Ok(Backend::Whisper(WhisperBackend {
+        Ok(WhisperBackend {
             whisper: state,
             vad,
             audio_buffer: Vec::new(),
             config,
-            state: Default::default(),
+            state: Transcription::default(),
             processed_time: 0.0,
             total_time: 0.0,
             flush_threshold: 0.0,
-        }))
+        })
     }
 
     /// the params to use for ` WhisperState.full`
-    fn whisper_full_params<'a>(&self) -> whisper_rs::FullParams<'a, 'a> {
+    fn whisper_full_params<'a>() -> whisper_rs::FullParams<'a, 'a> {
         let mut params = whisper_rs::FullParams::new(whisper_rs::SamplingStrategy::BeamSearch {
             beam_size: 5,
             patience: 1.0,
@@ -113,16 +111,16 @@ impl WhisperBackend {
         } else if vad_segments <= 0 {
             log::debug!("No Vad segments. Skipping...");
 
-            if !self.audio_buffer.is_empty() {
+            if self.audio_buffer.is_empty() {
+                // already silent update timestamps only
+                self.processed_time += chunk_duration;
+            } else {
                 // add the empty audio to break sentences
                 self.audio_buffer.append(&mut audio_chunk);
                 self.flush_threshold += chunk_duration;
-            } else {
-                // already silent update timestamps only
-                self.processed_time += chunk_duration;
             }
 
-            let current_silence = self.state.current_silence.get_or_insert_with(|| Silence {
+            let current_silence = self.state.current_silence.get_or_insert(Silence {
                 timestamp: Timestamp {
                     start: self.total_time - chunk_duration,
                     end: self.total_time - chunk_duration,
@@ -134,7 +132,7 @@ impl WhisperBackend {
             return Ok(self.state.clone());
         } else {
             self.clear_silence();
-            log::debug!("Found Vad segments: {}", vad_segments);
+            log::debug!("Found Vad segments: {vad_segments}");
         }
 
         self.audio_buffer.append(&mut audio_chunk);
@@ -156,7 +154,7 @@ impl WhisperBackend {
     }
 
     fn run_asr(&mut self, finalize_all: bool) -> Result<()> {
-        let whisper_params = self.whisper_full_params();
+        let whisper_params = Self::whisper_full_params();
 
         let result = self.whisper.full(whisper_params, &self.audio_buffer);
         if finalize_all && result.is_err() && matches!(result, Err(WhisperError::NoSamples)) {
@@ -189,7 +187,7 @@ impl WhisperBackend {
 
             for idx in 0..partials_start_idx {
                 let segment = self.get_whisper_segment(idx, time_offset)?;
-                log::debug!("Finalized partial segment:\n {}", segment);
+                log::debug!("Finalized partial segment:\n {segment}");
 
                 self.state.full_text.push_str(&segment.text);
                 self.state.finalized.push(segment);
@@ -216,12 +214,12 @@ impl WhisperBackend {
             .get_segment(idx)
             .ok_or(Error::SegmentParseFailed)?;
 
-        parse_segment(segment, time_offset)
+        parse_segment(&segment, time_offset)
     }
 
     /// Removes the first `n` samples from the audio buffer.
     /// If n is larger than the total number of frames, the total number is used instead.
-    /// This also updates the processed_time.
+    /// This also updates the `processed_time`.
     fn drop_samples_from_buffer(&mut self, mut n: usize) {
         if n < self.audio_buffer.len() {
             let orig_size = self.audio_buffer.len();
@@ -254,35 +252,39 @@ impl WhisperBackend {
         self.flush_threshold = 0.0;
     }
 
-    #[inline(always)]
     fn should_flush(&self, chunk_duration: f64) -> bool {
         self.flush_threshold + chunk_duration >= self.config.silence_threshold
-            && self.audio_buffer.len() != 0
+            && !self.audio_buffer.is_empty()
     }
 }
 
 impl Drop for WhisperBackend {
     fn drop(&mut self) {
-        log::info!("Whisper backend has been shutdown")
+        log::info!("Whisper backend has been shutdown");
     }
 }
 
 /// converts the number of audio samples to a duration.
 /// This assumes that the audio is single chanel and is sampled at `SAMPLE_RATE`.
-#[inline(always)]
+#[allow(clippy::cast_precision_loss)]
 fn samples_to_duration(n: usize) -> f64 {
     n as f64 / SAMPLE_RATE as f64
 }
 
 /// converts the centisecond timestamp to the number of samples.
 /// This has the same assumptions as `samples_to_duration`
-#[inline(always)]
+#[allow(clippy::cast_sign_loss, reason = "value is always postive")]
+#[allow(
+    clippy::cast_possible_truncation,
+    reason = "`c` will fit in u32 unless the audio is longer than a year"
+)]
 fn centiseconds_to_samples(c: i64) -> usize {
     (c as usize * SAMPLE_RATE) / 100
 }
 
 /// parses a whisper segment into the segment type used in this crate
-fn parse_segment(segment: WhisperSegment, time_offset: f64) -> Result<Segment> {
+#[allow(clippy::cast_precision_loss, clippy::cast_sign_loss)]
+fn parse_segment(segment: &WhisperSegment, time_offset: f64) -> Result<Segment> {
     let start_time = time_offset + segment.start_timestamp() as f64 / 100.0;
     let end_time = time_offset + segment.end_timestamp() as f64 / 100.0;
     let text = segment.to_str().map_err(Error::Transcribe)?;
@@ -298,7 +300,7 @@ fn parse_segment(segment: WhisperSegment, time_offset: f64) -> Result<Segment> {
                 probability,
                 text: token
                     .to_str_lossy()
-                    .map_err(|e| Error::Transcribe(e))?
+                    .map_err(Error::Transcribe)?
                     .into_owned(),
             });
             total_probability += probability;

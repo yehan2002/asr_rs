@@ -53,8 +53,8 @@ pub enum VadModel {
     Custom { name: String, base_url: String },
 }
 
-const VAD_BASE_URL: &'static str = "https://huggingface.co/ggml-org/whisper-vad/resolve/main/";
-const WHISPER_BASE_URL: &'static str = "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/";
+const VAD_BASE_URL: &str = "https://huggingface.co/ggml-org/whisper-vad/resolve/main/";
+const WHISPER_BASE_URL: &str = "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/";
 
 impl Model for VadModel {
     fn model_info(&self) -> crate::models::ModelInfo {
@@ -91,10 +91,10 @@ impl Model for WhisperModel {
             WhisperModel::Turbo => "large-v3-turbo",
         };
         let file_name = format!("ggml-{name}.bin");
-        return crate::models::ModelInfo {
-            file_name: file_name,
+        crate::models::ModelInfo {
+            file_name,
             model_type: "whisper".to_owned(),
             base_url: WHISPER_BASE_URL.to_owned(),
-        };
+        }
     }
 }

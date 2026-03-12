@@ -1,4 +1,5 @@
 #![warn(clippy::pedantic)]
+#![deny(clippy::unwrap_used)]
 
 mod backend;
 mod config;
@@ -11,7 +12,6 @@ mod stream_async;
 #[cfg(feature = "async")]
 pub use stream_async::*;
 
-pub mod util;
 pub mod whisper;
 
 pub(crate) use backend::Backend;
@@ -27,17 +27,30 @@ pub struct Transcriber {
 }
 
 impl Transcriber {
+    /// Creates a new transcriber for the given config.
+    ///
+    /// # Errors
+    /// Currently does not return an error.
     pub fn new(cfg: Config) -> Result<Self> {
-        return Ok(Transcriber { cfg });
+        Ok(Transcriber { cfg })
     }
 
     /// Attempt to download the models given in the config.
     /// This will always fail if `model_download` feature is not enabled.
+    ///
+    /// # Errors
+    ///
+    /// This will return an error if model downloading fails or if the model is not downloaded and the `model_download` feature is disabled.
     pub fn download_models(&self) -> Result<()> {
         self.cfg.backend.download_models()
     }
 
-    /// Transcribe a chunk of audio.
+    /// Transcribe the given audio.
+    /// The audio must be sampled at 16,000hz.
+    /// For transcribing live audio use a `StreamTranscriber`.
+    ///
+    /// # Errors
+    /// Returns an error if transcription fails.
     pub fn transcribe(&self, audio: Vec<f32>) -> Result<Transcription> {
         let mut stream = self.create_stream()?;
         stream.transcribe_audio(audio)?;
@@ -45,12 +58,21 @@ impl Transcriber {
     }
 
     /// Create a transcriber that can trascribe a stream of audio chunks.
+    ///
+    /// # Errors
+    ///
+    /// This function will return an error if initializing the backend fails.
     pub fn create_stream(&self) -> Result<StreamTranscriber> {
-        return StreamTranscriber::create(self.cfg.clone());
+        StreamTranscriber::create(self.cfg.clone())
     }
 
     #[cfg(feature = "async")]
+    /// Create an async transcriber that can trascribe a stream of audio chunks.
+    ///
+    /// # Errors
+    ///
+    /// This function will return an error if initializing the backend fails.
     pub async fn create_async_stream(&self) -> Result<AsyncStreamTranscriber> {
-        return AsyncStreamTranscriber::create(self.cfg.clone()).await;
+        AsyncStreamTranscriber::create(self.cfg.clone()).await
     }
 }

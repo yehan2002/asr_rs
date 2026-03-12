@@ -31,11 +31,11 @@ pub enum Error {
     Download(AnyError),
 
     /// Worker has been shutdown.
-    /// Only returned by AsyncStreamTranscriber
+    /// Only returned by `AsyncStreamTranscriber`
     #[error("Worker has been shutdown: {0}")]
     WorkerShutdown(AnyError),
 
-    /// The model was not found at the path and model downloading is disabled ('model_download' feature is not enabled)
+    /// The model was not found at the path and model downloading is disabled (`model_download` feature is not enabled)
     #[error("{model} Model was not found at {path}. Download it from {url}")]
     ModelNotFound {
         model: String,

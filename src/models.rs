@@ -1,4 +1,4 @@
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 use crate::{Error, Result};
 
@@ -11,7 +11,7 @@ pub(crate) struct ModelInfo {
 pub(crate) trait Model {
     fn model_info(&self) -> ModelInfo;
 
-    fn resolve_model(&self, model_dir: &PathBuf) -> Result<String> {
+    fn resolve_model(&self, model_dir: &Path) -> Result<String> {
         let model = self.model_info();
 
         let model_path = model_dir.join(&model.model_type).join(&model.file_name);
@@ -23,7 +23,7 @@ pub(crate) trait Model {
 
         if !model_path.exists() {
             let url = format!("{}{}", model.base_url, model.file_name);
-            download_model(model.file_name, model_path, url)?;
+            download_model(&model.file_name, model_path, url)?;
         }
 
         Ok(model_path_str)
@@ -31,16 +31,16 @@ pub(crate) trait Model {
 }
 
 #[cfg(not(feature = "model_download"))]
-fn download_model(model_name: String, out_path: PathBuf, url: String) -> Result<()> {
+fn download_model(model_name: &str, out_path: PathBuf, url: String) -> Result<()> {
     Err(Error::ModelNotFound {
-        model: model_name,
+        model: model_name.to_owned(),
         path: out_path.to_string_lossy().into_owned(),
         url: url,
     })
 }
 
 #[cfg(feature = "model_download")]
-fn download_model(model_name: String, out_path: PathBuf, url: String) -> Result<()> {
+fn download_model(model_name: &str, out_path: PathBuf, url: String) -> Result<()> {
     // create parent dir
     std::fs::create_dir_all(out_path.parent().expect("path should have parent"))
         .map_err(|e| Error::Download(Box::new(e)))?;
@@ -58,8 +58,7 @@ fn download_model(model_name: String, out_path: PathBuf, url: String) -> Result<
         .headers()
         .get("Content-Length")
         .and_then(|ct_len| ct_len.to_str().ok())
-        .map(|ct_len| ct_len.parse::<u64>().ok())
-        .flatten()
+        .and_then(|ct_len| ct_len.parse::<u64>().ok())
         .unwrap_or(0);
 
     // progress bar

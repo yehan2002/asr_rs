@@ -53,6 +53,14 @@ impl AsyncStreamTranscriber {
         Ok(Self { sender: tx })
     }
 
+    /// Transcribes the given audio chunk into text.
+    /// The audio chunk must be sampled at 16,000hz.
+    /// The returned result has all text that has been transcribed upto now (including from previous calls).
+    ///
+    /// # Errors
+    ///
+    /// This function will return an error if transcription fails.
+    /// The reason for the error depends on the backend type.
     pub async fn transcribe_audio(&self, vec: Vec<f32>) -> Result<Transcription> {
         let (resp_tx, resp_rx) = oneshot::channel();
         self.sender
@@ -65,6 +73,11 @@ impl AsyncStreamTranscriber {
             .map_err(|e| Error::WorkerShutdown(Box::new(e)))?
     }
 
+    /// Finishes the transcription and returns the total transcription.
+    ///
+    /// # Errors
+    ///
+    /// Same as `transcribe_audio`.
     pub async fn finish_transcribing(self, last_chunk: Option<Vec<f32>>) -> Result<Transcription> {
         let (resp_tx, resp_rx) = oneshot::channel();
         self.sender

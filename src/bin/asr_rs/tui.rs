@@ -2,8 +2,8 @@ use std::sync::mpsc::{self, TryRecvError};
 use std::time::Duration;
 use std::{io, thread};
 
-use crate::util::mic_input;
-use crate::{BackendConfig, StreamTranscriber, Transcription, whisper};
+use crate::mic::mic_input;
+use asr_rs::{BackendConfig, StreamTranscriber, Transcription, whisper};
 use ratatui::style::{Color, Style};
 use ratatui::text::Text;
 use ratatui::widgets::{self, List, ListState};
@@ -18,7 +18,7 @@ use ratatui::{
 };
 
 #[derive(Debug, Default)]
-struct App {
+pub struct App {
     transcript: Transcription,
     exit: bool,
 
@@ -26,13 +26,9 @@ struct App {
     auto_scroll: bool,
 }
 
-pub fn run() -> std::io::Result<()> {
-    ratatui::run(|terminal| App::default().run(terminal))
-}
-
 impl App {
     pub fn run(&mut self, terminal: &mut ratatui::DefaultTerminal) -> io::Result<()> {
-        let config = crate::Config {
+        let config = asr_rs::Config {
             backend: BackendConfig::Whisper(whisper::Config {
                 model: whisper::WhisperModel::Medium,
                 ..Default::default()
@@ -42,11 +38,14 @@ impl App {
         let (ts_tx, ts_rx) = mpsc::sync_channel(0);
 
         thread::spawn(move || {
-            let mut ts = StreamTranscriber::create(config).unwrap();
-            let (stream, audio_rx) = mic_input();
+            let mut ts = StreamTranscriber::create(config).expect("backend should initialize");
+            let (stream, audio_rx) = mic_input().expect("Mic should initialize");
 
             while let Ok(chunk) = audio_rx.recv() {
-                if ts_tx.send(ts.transcribe_audio(chunk).unwrap()).is_err() {
+                let asr = ts
+                    .transcribe_audio(chunk)
+                    .expect("transcription should succeed");
+                if ts_tx.send(asr).is_err() {
                     return;
                 }
             }
@@ -63,7 +62,7 @@ impl App {
                 if has_event {
                     self.handle_events()?;
                     break;
-                };
+                }
 
                 match ts_rx.try_recv() {
                     Ok(data) => self.transcript = data,
@@ -85,10 +84,10 @@ impl App {
     fn handle_events(&mut self) -> io::Result<()> {
         match event::read()? {
             Event::Key(key_event) if key_event.kind == KeyEventKind::Press => {
-                self.handle_key_event(key_event)
+                self.handle_key_event(key_event);
             }
             _ => {}
-        };
+        }
         Ok(())
     }
 
@@ -148,7 +147,7 @@ impl Widget for &App {
     }
 }
 
-fn line_to_list_item(line: &crate::Line) -> Text<'static> {
+fn line_to_list_item(line: &asr_rs::Line) -> Text<'static> {
     let timestamp = line.timestamp();
     let text = format!(
         "[{0:.2} -> {1:.2}] {2}",
@@ -159,21 +158,21 @@ fn line_to_list_item(line: &crate::Line) -> Text<'static> {
     let style = Style::new();
 
     let style = match line {
-        crate::Line::Complete(segment) => {
+        asr_rs::Line::Complete(segment) => {
             if segment.probability > 0.85 {
                 style.green()
             } else {
                 style.light_yellow()
             }
         }
-        crate::Line::Partial(segment) => {
+        asr_rs::Line::Partial(segment) => {
             if segment.probability > 0.85 {
                 style.white()
             } else {
                 style.gray()
             }
         }
-        crate::Line::Silence(_) => style.magenta(),
+        asr_rs::Line::Silence(_) => style.magenta(),
     };
 
     Text::styled(text, style)

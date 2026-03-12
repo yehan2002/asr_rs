@@ -1,13 +1,15 @@
-use crate::{BackendConfig, Result, Transcription, whisper};
+use crate::{BackendConfig, Result, Transcription};
 
 pub(crate) enum Backend {
-    Whisper(whisper::WhisperBackend),
+    Whisper(crate::whisper::WhisperBackend),
 }
 
 impl Backend {
     pub fn from_config(cfg: BackendConfig) -> Result<Self> {
         match cfg {
-            BackendConfig::Whisper(config) => whisper::WhisperBackend::new(config),
+            BackendConfig::Whisper(config) => {
+                crate::whisper::WhisperBackend::new(config).map(Backend::Whisper)
+            }
         }
     }
 

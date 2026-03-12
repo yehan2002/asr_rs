@@ -13,6 +13,12 @@ pub struct Config {
 }
 
 impl BackendConfig {
+    /// Downloads the models used for this config.
+    /// Skips download if the models are already in the `model_dir`.
+    ///
+    /// # Errors
+    ///
+    /// This function will return an error if downloading fails or if the `model_download` feature is not enabled.
     pub fn download_models(&self) -> Result<()> {
         match self {
             Self::Whisper(cfg) => {
