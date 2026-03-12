@@ -5,7 +5,7 @@ use whisper_rs::{WhisperError, WhisperSegment};
 
 use crate::{Error, Result, Segment, Silence, Timestamp, Token, Transcription, models::Model};
 
-pub use crate::whisper::config::{Config, VadModel, WhisperModel};
+pub use super::whisper::config::{VadModel, Whisper, WhisperModel};
 
 const SAMPLE_RATE: usize = 16000;
 
@@ -21,11 +21,11 @@ pub(crate) struct WhisperBackend {
 
     state: Transcription,
 
-    config: Config,
+    config: Whisper,
 }
 
 impl WhisperBackend {
-    pub fn new(config: Config) -> Result<Self> {
+    pub fn new(config: Whisper) -> Result<Self> {
         let model_path = config.model.resolve_model(&config.model_dir)?;
         let vad_path = config.vad.resolve_model(&config.model_dir)?;
 

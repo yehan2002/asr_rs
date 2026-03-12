@@ -2,11 +2,11 @@ use std::path::PathBuf;
 
 use serde::Deserialize;
 
-use crate::models::Model;
+use crate::{BackendConfig, models::Model};
 
 /// Config for the whisper ASR backend
 #[derive(Debug, Deserialize, Clone)]
-pub struct Config {
+pub struct Whisper {
     /// The model to use.
     ///  The model must be available in the `model_dir`/whisper/ directory.
     pub model: WhisperModel,
@@ -23,7 +23,7 @@ pub struct Config {
     pub silence_threshold: f64,
 }
 
-impl Default for Config {
+impl Default for Whisper {
     fn default() -> Self {
         Self {
             model: WhisperModel::Medium,
@@ -32,6 +32,12 @@ impl Default for Config {
             segment_buffer: 2,
             silence_threshold: 3.0,
         }
+    }
+}
+
+impl From<Whisper> for BackendConfig {
+    fn from(value: Whisper) -> Self {
+        BackendConfig::Whisper(value)
     }
 }
 

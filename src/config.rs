@@ -1,9 +1,9 @@
-use crate::{error::Result, models::Model, whisper};
+use crate::{backend, error::Result, models::Model};
 
 #[derive(Debug, Clone, serde::Deserialize)]
 #[serde(tag = "backend", rename_all = "snake_case")]
 pub enum BackendConfig {
-    Whisper(whisper::Config),
+    Whisper(backend::whisper::Whisper),
 }
 
 #[derive(Debug, Clone, serde::Deserialize)]

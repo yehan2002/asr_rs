@@ -1,7 +1,7 @@
 #![warn(clippy::pedantic)]
 #![deny(clippy::unwrap_used)]
 
-mod backend;
+pub mod backend;
 mod config;
 mod error;
 mod segment;
@@ -12,7 +12,16 @@ mod stream_async;
 #[cfg(feature = "async")]
 pub use stream_async::*;
 
-pub mod whisper;
+pub mod whisper {
+    use crate::backend;
+
+    #[deprecated = "use backend::Whisper instead"]
+    pub type Config = backend::whisper::Whisper;
+    #[deprecated = "use backend::WhisperModel instead"]
+    pub type WhisperModel = backend::whisper::WhisperModel;
+    #[deprecated = "use backend::WhisperVadModel instead"]
+    pub type VadModel = backend::whisper::VadModel;
+}
 
 pub(crate) use backend::Backend;
 pub use error::{Error, Result};

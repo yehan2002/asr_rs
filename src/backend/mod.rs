@@ -1,14 +1,18 @@
 use crate::{BackendConfig, Result, Transcription};
 
+pub(crate) mod whisper;
+
+pub use whisper::{VadModel as WhisperVadModel, Whisper, WhisperModel};
+
 pub(crate) enum Backend {
-    Whisper(crate::whisper::WhisperBackend),
+    Whisper(whisper::WhisperBackend),
 }
 
 impl Backend {
     pub fn from_config(cfg: BackendConfig) -> Result<Self> {
         match cfg {
             BackendConfig::Whisper(config) => {
-                crate::whisper::WhisperBackend::new(config).map(Backend::Whisper)
+                whisper::WhisperBackend::new(config).map(Backend::Whisper)
             }
         }
     }

@@ -3,7 +3,7 @@ use std::time::Duration;
 use std::{io, thread};
 
 use crate::mic::mic_input;
-use asr_rs::{BackendConfig, StreamTranscriber, Transcription, whisper};
+use asr_rs::{StreamTranscriber, Transcription, backend};
 use ratatui::style::{Color, Style};
 use ratatui::text::Text;
 use ratatui::widgets::{self, List, ListState};
@@ -29,10 +29,11 @@ pub struct App {
 impl App {
     pub fn run(&mut self, terminal: &mut ratatui::DefaultTerminal) -> io::Result<()> {
         let config = asr_rs::Config {
-            backend: BackendConfig::Whisper(whisper::Config {
-                model: whisper::WhisperModel::Medium,
+            backend: backend::Whisper {
+                model: backend::WhisperModel::Medium,
                 ..Default::default()
-            }),
+            }
+            .into(),
         };
 
         let (ts_tx, ts_rx) = mpsc::sync_channel(0);
